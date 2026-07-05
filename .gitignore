@@ -1,0 +1,26 @@
+
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md
+.codacy
+
+# Supabase db password
+.db-password
+supabase/.temp/
+supabase/.branches/
+
+# Environment files (keep examples tracked)
+.env
+.env.*
+!.env.example
+
+# Frontend dependencies and build artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/elm-stuff/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# OS files
+.DS_Store

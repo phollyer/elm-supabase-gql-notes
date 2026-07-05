@@ -1,0 +1,2 @@
+-- Seed data intentionally minimal.
+-- Add deterministic data here once auth test users are defined.
