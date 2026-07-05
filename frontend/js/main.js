@@ -1,7 +1,10 @@
+/* global document */
+
 import { Elm } from '../src/Main.elm'
 import {
     initializeSession,
     signInWithPassword,
+    signUpWithPassword,
     signInWithMagicLink,
     signOut
 } from './supabase/auth.js'
@@ -21,6 +24,10 @@ const run = async (message) => {
     switch (message.type) {
         case 'initialize-session':
             emit(await initializeSession(requestId))
+            return
+
+        case 'sign-up-password':
+            emit(await signUpWithPassword(requestId, message.email, message.password))
             return
 
         case 'sign-in-password':

@@ -1,42 +1,55 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (Html, button, div, h1, input, p, text, textarea)
-import Html.Attributes exposing (placeholder, style, type_, value)
-import Html.Events exposing (onClick, onInput)
+import Html exposing (Html, div, h1, p, text)
+import Html.Attributes exposing (style, value)
 import Json.Decode as Decode
 import Ports.Supabase as Supabase
 import String
+import UI.FormElements exposing (attemptButton, emailInput, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, passwordConfirmInput, passwordInput)
 
 
 type alias Model =
     { email : String
+    , emailError : Maybe String
     , password : String
+    , passwordError : Maybe String
+    , passwordConfirm : String
+    , passwordConfirmError : Maybe String
     , title : String
     , body : String
     , status : String
-    , session : Session
+    , state : State
     , notes : List Supabase.Note
     , nextId : Int
     }
 
 
-type Session
-    = SignedOut
+type State
+    = Start
+    | SignUp
+    | SignIn
+    | MagicLink
     | SignedIn { userId : String, email : String }
 
 
 type Msg
     = EmailUpdated String
     | PasswordUpdated String
-    | TitleUpdated String
-    | BodyUpdated String
+    | PasswordConfirmUpdated String
     | StartSessionCheck
     | AttemptPasswordSignIn
+    | AttemptPasswordSignUp
     | AttemptMagicLinkSignIn
     | AttemptSignOut
     | AttemptFetchNotes
     | AttemptCreateNote
+    | GotoStart
+    | GotoSignUp
+    | GotoSignIn
+    | GotoMagicLink
+    | TitleUpdated String
+    | BodyUpdated String
     | SupabaseEventReceived Decode.Value
 
 
@@ -55,11 +68,15 @@ init _ =
     let
         model =
             { email = ""
+            , emailError = Nothing
             , password = ""
+            , passwordError = Nothing
+            , passwordConfirm = ""
+            , passwordConfirmError = Nothing
             , title = ""
             , body = ""
             , status = "Checking session..."
-            , session = SignedOut
+            , state = Start
             , notes = []
             , nextId = 1
             }
@@ -77,22 +94,96 @@ subscriptions _ =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        StartSessionCheck ->
+            ( { model | status = "Checking session..." }
+            , Supabase.sendCommand (Supabase.InitializeSession { requestId = nextRequestId model })
+            )
+
+        GotoStart ->
+            ( { model
+                | status = "Please sign in or sign up."
+                , state = Start
+              }
+            , Cmd.none
+            )
+
+        GotoSignUp ->
+            ( { model
+                | status = "Registering user..."
+                , state = SignUp
+              }
+            , Cmd.none
+            )
+
+        GotoSignIn ->
+            ( { model
+                | status = "Please sign in."
+                , state = SignIn
+              }
+            , Cmd.none
+            )
+
+        GotoMagicLink ->
+            ( { model
+                | status = "Please sign in with magic link."
+                , state = MagicLink
+              }
+            , Cmd.none
+            )
+
         EmailUpdated value ->
             ( { model | email = value }, Cmd.none )
 
         PasswordUpdated value ->
             ( { model | password = value }, Cmd.none )
 
-        TitleUpdated value ->
-            ( { model | title = value }, Cmd.none )
+        PasswordConfirmUpdated value ->
+            ( { model | passwordConfirm = value }, Cmd.none )
 
-        BodyUpdated value ->
-            ( { model | body = value }, Cmd.none )
+        AttemptPasswordSignUp ->
+            let
+                emailError =
+                    if String.isEmpty model.email then
+                        Just "Email is required."
 
-        StartSessionCheck ->
-            ( { model | status = "Checking session..." }
-            , Supabase.sendCommand (Supabase.InitializeSession { requestId = nextRequestId model })
-            )
+                    else
+                        Nothing
+
+                passwordError =
+                    if String.isEmpty model.password then
+                        Just "Password is required."
+
+                    else
+                        Nothing
+
+                passwordConfirmError =
+                    if model.password /= model.passwordConfirm then
+                        Just "Passwords do not match."
+
+                    else
+                        Nothing
+
+                newModel =
+                    { model
+                        | emailError = emailError
+                        , passwordError = passwordError
+                        , passwordConfirmError = passwordConfirmError
+                    }
+            in
+            case ( emailError, passwordError, passwordConfirmError ) of
+                ( Nothing, Nothing, Nothing ) ->
+                    ( { newModel | status = "Signing up with password..." }
+                    , Supabase.sendCommand
+                        (Supabase.SignUpWithPassword
+                            { requestId = nextRequestId model
+                            , email = model.email
+                            , password = model.password
+                            }
+                        )
+                    )
+
+                _ ->
+                    ( { newModel | status = "Please fix the errors below." }, Cmd.none )
 
         AttemptPasswordSignIn ->
             if String.isEmpty model.email || String.isEmpty model.password then
@@ -148,6 +239,12 @@ update msg model =
                     )
                 )
 
+        TitleUpdated value ->
+            ( { model | title = value }, Cmd.none )
+
+        BodyUpdated value ->
+            ( { model | body = value }, Cmd.none )
+
         SupabaseEventReceived payload ->
             case Decode.decodeValue Supabase.decodeEvent payload of
                 Ok event ->
@@ -162,14 +259,14 @@ applyEvent event model =
     case event of
         Supabase.SessionReady payload ->
             ( { model
-                | session = SignedIn { userId = payload.userId, email = payload.email }
+                | state = SignedIn { userId = payload.userId, email = payload.email }
                 , status = "Session ready."
               }
             , Supabase.sendCommand (Supabase.FetchNotes { requestId = nextRequestId model })
             )
 
         Supabase.SessionMissing _ ->
-            ( { model | session = SignedOut, notes = [], status = "You are signed out." }, Cmd.none )
+            ( { model | state = Start, notes = [], status = "You are signed out." }, Cmd.none )
 
         Supabase.NotesLoaded payload ->
             ( { model | notes = payload.notes, status = "Notes loaded." }, Cmd.none )
@@ -205,79 +302,79 @@ view model =
          , p [ style "color" "#444" ] [ text "Personal knowledge tracker starter." ]
          , p [ style "padding" "0.5rem" ] [ text model.status ]
          ]
-            ++ authView model
-            ++ notesView model
+            ++ (case model.state of
+                    Start ->
+                        selectView
+
+                    SignUp ->
+                        signUpView model.email model.password model.passwordConfirm
+
+                    SignIn ->
+                        signInView model.email model.password
+
+                    MagicLink ->
+                        magicLinkView model.email
+
+                    SignedIn _ ->
+                        signedInView model.title model.body model.notes
+               )
         )
 
 
-authView : Model -> List (Html Msg)
-authView model =
-    case model.session of
-        SignedOut ->
-            [ input
-                [ placeholder "Email"
-                , value model.email
-                , onInput EmailUpdated
-                , style "display" "block"
-                , style "margin" "0.5rem 0"
-                , style "padding" "0.5rem"
-                , style "width" "100%"
-                ]
-                []
-            , input
-                [ type_ "password"
-                , placeholder "Password"
-                , value model.password
-                , onInput PasswordUpdated
-                , style "display" "block"
-                , style "margin" "0.5rem 0"
-                , style "padding" "0.5rem"
-                , style "width" "100%"
-                ]
-                []
-            , button [ onClick AttemptPasswordSignIn, style "margin-right" "0.5rem" ] [ text "Sign in" ]
-            , button [ onClick AttemptMagicLinkSignIn ] [ text "Magic link" ]
-            ]
-
-        SignedIn session ->
-            [ p [] [ text ("Signed in as " ++ session.email) ]
-            , button [ onClick AttemptSignOut, style "margin-right" "0.5rem" ] [ text "Sign out" ]
-            , button [ onClick AttemptFetchNotes ] [ text "Refresh notes" ]
-            ]
+selectView : List (Html Msg)
+selectView =
+    [ gotoButton "Sign up" GotoSignUp
+    , gotoButton "Sign in" GotoSignIn
+    , gotoButton "Magic link" GotoMagicLink
+    ]
 
 
-notesView : Model -> List (Html Msg)
-notesView model =
-    case model.session of
-        SignedOut ->
-            []
+signUpView : String -> String -> String -> List (Html Msg)
+signUpView email password passwordConfirm =
+    [ emailInput email EmailUpdated
+    , passwordInput password PasswordUpdated
+    , passwordConfirmInput passwordConfirm PasswordConfirmUpdated
+    , gotoStartButton GotoStart
+    , attemptButton "Sign up" AttemptPasswordSignUp
+    ]
 
-        SignedIn _ ->
-            [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Notes" ]
-            , input
-                [ placeholder "Title"
-                , value model.title
-                , onInput TitleUpdated
-                , style "display" "block"
-                , style "margin" "0.5rem 0"
-                , style "padding" "0.5rem"
-                , style "width" "100%"
-                ]
-                []
-            , textarea
-                [ placeholder "Body"
-                , value model.body
-                , onInput BodyUpdated
-                , style "display" "block"
-                , style "min-height" "100px"
-                , style "margin" "0.5rem 0"
-                , style "padding" "0.5rem"
-                , style "width" "100%"
-                ]
-                []
-            , button [ onClick AttemptCreateNote ] [ text "Create note" ]
-            , div [ style "margin-top" "1rem" ] (List.map noteCard model.notes)
-            ]
+
+signInView : String -> String -> List (Html Msg)
+signInView email password =
+    [ emailInput email EmailUpdated
+    , passwordInput password PasswordUpdated
+    , gotoStartButton GotoStart
+    , attemptButton "Sign in" AttemptPasswordSignIn
+    ]
+
+
+magicLinkView : String -> List (Html Msg)
+magicLinkView email =
+    [ emailInput email EmailUpdated
+    , gotoStartButton GotoStart
+    , attemptButton "Send magic link" AttemptMagicLinkSignIn
+    ]
+
+
+signedInView : String -> String -> List Supabase.Note -> List (Html Msg)
+signedInView title body notes =
+    notesView title body notes
+        ++ [ attemptButton "Sign out" AttemptSignOut
+           ]
+
+
+
+{- ######### Notes View ######### -}
+
+
+notesView : String -> String -> List Supabase.Note -> List (Html Msg)
+notesView title body notes =
+    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Notes" ]
+    , notesTitleInput title TitleUpdated
+    , notesContentInput body BodyUpdated
+    , attemptButton "Create note" AttemptCreateNote
+    , div [ style "margin-top" "1rem" ] (List.map noteCard notes)
+    ]
 
 
 noteCard : Supabase.Note -> Html Msg

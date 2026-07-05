@@ -1,0 +1,7 @@
+{
+    "problems.exclude": {
+        "**/node_modules/**": true,
+        "**/dist/**": true,
+        "**/elm-stuff/**": true
+    }
+}

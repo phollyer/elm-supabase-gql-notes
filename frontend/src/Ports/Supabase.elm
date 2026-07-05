@@ -16,6 +16,7 @@ type Command
     = InitializeSession { requestId : String }
     | SignInWithPassword { requestId : String, email : String, password : String }
     | SignInWithMagicLink { requestId : String, email : String }
+    | SignUpWithPassword { requestId : String, email : String, password : String }
     | SignOut { requestId : String }
     | FetchNotes { requestId : String }
     | CreateNote { requestId : String, title : String, body : String }
@@ -64,6 +65,14 @@ encodeCommand command =
             Encode.object
                 [ ( "type", Encode.string "initialize-session" )
                 , ( "requestId", Encode.string payload.requestId )
+                ]
+
+        SignUpWithPassword payload ->
+            Encode.object
+                [ ( "type", Encode.string "sign-up-password" )
+                , ( "requestId", Encode.string payload.requestId )
+                , ( "email", Encode.string payload.email )
+                , ( "password", Encode.string payload.password )
                 ]
 
         SignInWithPassword payload ->
