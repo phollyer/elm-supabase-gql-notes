@@ -1,7 +1,7 @@
 module Main exposing (main)
 
 import Browser
-import Html exposing (Html, div, h1, p, text)
+import Html exposing (Html, div, h1, h2, p, text)
 import Html.Attributes exposing (style, value)
 import Json.Decode as Decode
 import Ports.Supabase as Supabase
@@ -30,7 +30,7 @@ type State
     | SignUp
     | SignIn
     | MagicLink
-    | SignedIn { userId : String, email : String }
+    | SignedIn
 
 
 type Msg
@@ -259,8 +259,9 @@ applyEvent event model =
     case event of
         Supabase.SessionReady payload ->
             ( { model
-                | state = SignedIn { userId = payload.userId, email = payload.email }
+                | state = SignedIn
                 , status = "Session ready."
+                , email = payload.email
               }
             , Supabase.sendCommand (Supabase.FetchNotes { requestId = nextRequestId model })
             )
@@ -315,7 +316,7 @@ view model =
                     MagicLink ->
                         magicLinkView model.email
 
-                    SignedIn _ ->
+                    SignedIn ->
                         signedInView model.title model.body model.notes
                )
         )
@@ -359,8 +360,6 @@ magicLinkView email =
 signedInView : String -> String -> List Supabase.Note -> List (Html Msg)
 signedInView title body notes =
     notesView title body notes
-        ++ [ attemptButton "Sign out" AttemptSignOut
-           ]
 
 
 
@@ -373,6 +372,7 @@ notesView title body notes =
     , notesTitleInput title TitleUpdated
     , notesContentInput body BodyUpdated
     , attemptButton "Create note" AttemptCreateNote
+    , h2 [ style "font-size" "1.1rem", style "margin-top" "1.5rem" ] [ text "Your notes" ]
     , div [ style "margin-top" "1rem" ] (List.map noteCard notes)
     ]
 
