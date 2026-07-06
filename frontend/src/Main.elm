@@ -6,7 +6,7 @@ import Html.Attributes exposing (style, value)
 import Json.Decode as Decode
 import Ports.Supabase as Supabase
 import String
-import UI.FormElements exposing (attemptButton, emailInput, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, passwordConfirmInput, passwordInput)
+import UI.FormElements exposing (attemptButton, clearResultsButton, emailInput, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, passwordConfirmInput, passwordInput, searchButton, searchNotesInput)
 
 
 type alias Model =
@@ -21,6 +21,8 @@ type alias Model =
     , status : String
     , state : State
     , notes : List Supabase.Note
+    , searchQuery : String
+    , searchResults : List Supabase.Note
     , nextId : Int
     }
 
@@ -31,6 +33,7 @@ type State
     | SignIn
     | MagicLink
     | SignedIn
+    | Search
 
 
 type Msg
@@ -42,12 +45,17 @@ type Msg
     | AttemptPasswordSignUp
     | AttemptMagicLinkSignIn
     | AttemptSignOut
-    | AttemptFetchNotes
     | AttemptCreateNote
+    | AttemptSearchNotes
+    | SearchQueryUpdated String
+    | ClearResults
+    | AttemptFetchNotes
     | GotoStart
     | GotoSignUp
     | GotoSignIn
     | GotoMagicLink
+    | GotoNotes
+    | GotoSearch
     | TitleUpdated String
     | BodyUpdated String
     | SupabaseEventReceived Decode.Value
@@ -78,6 +86,8 @@ init _ =
             , status = "Checking session..."
             , state = Start
             , notes = []
+            , searchQuery = ""
+            , searchResults = []
             , nextId = 1
             }
     in
@@ -130,6 +140,28 @@ update msg model =
               }
             , Cmd.none
             )
+
+        GotoNotes ->
+            ( { model
+                | status = "Viewing notes..."
+                , state = SignedIn
+              }
+            , Cmd.none
+            )
+
+        GotoSearch ->
+            ( { model
+                | status = "Search notes..."
+                , state = Search
+              }
+            , Cmd.none
+            )
+
+        SearchQueryUpdated value ->
+            ( { model | searchQuery = value }, Cmd.none )
+
+        ClearResults ->
+            ( { model | searchResults = [] }, Cmd.none )
 
         EmailUpdated value ->
             ( { model | email = value }, Cmd.none )
@@ -239,6 +271,16 @@ update msg model =
                     )
                 )
 
+        AttemptSearchNotes ->
+            ( { model | status = "Searching notes..." }
+            , Supabase.sendCommand
+                (Supabase.SearchNotes
+                    { requestId = nextRequestId model
+                    , query = model.searchQuery
+                    }
+                )
+            )
+
         TitleUpdated value ->
             ( { model | title = value }, Cmd.none )
 
@@ -271,6 +313,9 @@ applyEvent event model =
 
         Supabase.NotesLoaded payload ->
             ( { model | notes = payload.notes, status = "Notes loaded." }, Cmd.none )
+
+        Supabase.NotesFound payload ->
+            ( { model | searchResults = payload.notes, status = "Notes found." }, Cmd.none )
 
         Supabase.NoteCreated payload ->
             ( { model
@@ -318,6 +363,9 @@ view model =
 
                     SignedIn ->
                         signedInView model.title model.body model.notes
+
+                    Search ->
+                        searchNotesView model.searchQuery model.searchResults
                )
         )
 
@@ -329,15 +377,20 @@ headerRow state =
         , style "justify-content" "space-between"
         , style "align-items" "center"
         ]
-        (h1 [ style "margin" "0" ] [ text "Elm + Supabase" ]
-            :: (case state of
-                    SignedIn ->
-                        [ attemptButton "Sign out" AttemptSignOut ]
+        [ h1 [ style "margin" "0" ] [ text "Elm + Supabase" ]
+        , case state of
+            SignedIn ->
+                div
+                    [ style "display" "flex"
+                    , style "gap" "0.5rem"
+                    ]
+                    [ gotoButton "Search notes" GotoSearch
+                    , attemptButton "Sign out" AttemptSignOut
+                    ]
 
-                    _ ->
-                        []
-               )
-        )
+            _ ->
+                div [] []
+        ]
 
 
 selectView : List (Html Msg)
@@ -382,6 +435,18 @@ signedInView title body notes =
 
 
 {- ######### Notes View ######### -}
+
+
+searchNotesView : String -> List Supabase.Note -> List (Html Msg)
+searchNotesView searchQuery searchResults =
+    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Search Notes" ]
+    , p [ style "margin-top" "0.5rem" ] [ text "This is a placeholder for the search notes view." ]
+    , searchNotesInput searchQuery SearchQueryUpdated
+    , searchButton AttemptSearchNotes
+    , clearResultsButton ClearResults
+    , gotoButton "Back to Notes" GotoNotes
+    , div [ style "margin-top" "1rem" ] (List.map noteCard searchResults)
+    ]
 
 
 notesView : String -> String -> List Supabase.Note -> List (Html Msg)

@@ -1,5 +1,6 @@
 module UI.FormElements exposing
     ( attemptButton
+    , clearResultsButton
     , emailInput
     , gotoButton
     , gotoStartButton
@@ -7,6 +8,8 @@ module UI.FormElements exposing
     , notesTitleInput
     , passwordConfirmInput
     , passwordInput
+    , searchButton
+    , searchNotesInput
     )
 
 import Html exposing (..)
@@ -35,6 +38,20 @@ gotoButton label onClickMsg =
 gotoStartButton : msg -> Html msg
 gotoStartButton onClickMsg =
     gotoButton "Back to Start" onClickMsg
+
+
+searchButton : msg -> Html msg
+searchButton onClickMsg =
+    button
+        [ onClick onClickMsg, style "margin-right" "0.5rem" ]
+        [ text "Search Notes" ]
+
+
+clearResultsButton : msg -> Html msg
+clearResultsButton onClickMsg =
+    button
+        [ onClick onClickMsg, style "margin-right" "0.5rem" ]
+        [ text "Clear Results" ]
 
 
 
@@ -91,6 +108,20 @@ passwordConfirmInput passwordConfirm onInputMsg =
 
 
 {- ##### Notes Fields ##### -}
+
+
+searchNotesInput : String -> (String -> msg) -> Html msg
+searchNotesInput searchQuery onInputMsg =
+    input
+        [ placeholder "Search Notes"
+        , value searchQuery
+        , onInput onInputMsg
+        , style "display" "block"
+        , style "margin" "0.5rem 0"
+        , style "padding" "0.5rem"
+        , style "width" "100%"
+        ]
+        []
 
 
 notesTitleInput : String -> (String -> msg) -> Html msg

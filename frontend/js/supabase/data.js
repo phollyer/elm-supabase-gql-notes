@@ -57,3 +57,21 @@ export const createNote = async (requestId, title, body) => {
         note: data
     }
 }
+
+export const searchNotes = async (requestId, query) => {
+    const { data, error } = await supabase
+        .from('notes')
+        .select('id,title,body,created_at')
+        .or(`title.ilike.%${query}%,body.ilike.%${query}%`)
+        .order('created_at', { ascending: false })
+
+    if (error) {
+        return toError(requestId, error)
+    }
+
+    return {
+        type: 'notes-found',
+        requestId,
+        notes: data || []
+    }
+}

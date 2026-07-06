@@ -8,7 +8,7 @@ import {
     signInWithMagicLink,
     signOut
 } from './supabase/auth.js'
-import { createNote, fetchNotes } from './supabase/data.js'
+import { createNote, fetchNotes, searchNotes } from './supabase/data.js'
 
 const app = Elm.Main.init({
     node: document.getElementById('app')
@@ -48,6 +48,10 @@ const run = async (message) => {
 
         case 'create-note':
             emit(await createNote(requestId, message.title, message.body))
+            return
+
+        case 'search-notes':
+            emit(await searchNotes(requestId, message.query))
             return
 
         default:

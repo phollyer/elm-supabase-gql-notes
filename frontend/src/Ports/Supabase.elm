@@ -20,12 +20,14 @@ type Command
     | SignOut { requestId : String }
     | FetchNotes { requestId : String }
     | CreateNote { requestId : String, title : String, body : String }
+    | SearchNotes { requestId : String, query : String }
 
 
 type Event
     = SessionReady { requestId : String, userId : String, email : String }
     | SessionMissing { requestId : String }
     | NotesLoaded { requestId : String, notes : List Note }
+    | NotesFound { requestId : String, notes : List Note }
     | NoteCreated { requestId : String, note : Note }
     | ErrorRaised { requestId : String, message : String }
 
@@ -110,6 +112,13 @@ encodeCommand command =
                 , ( "body", Encode.string payload.body )
                 ]
 
+        SearchNotes payload ->
+            Encode.object
+                [ ( "type", Encode.string "search-notes" )
+                , ( "requestId", Encode.string payload.requestId )
+                , ( "query", Encode.string payload.query )
+                ]
+
 
 commandDecoder : Decoder Event
 commandDecoder =
@@ -142,6 +151,12 @@ decodeByType eventType =
         "notes-loaded" ->
             Decode.map2
                 (\requestId notes -> NotesLoaded { requestId = requestId, notes = notes })
+                (Decode.field "requestId" Decode.string)
+                (Decode.field "notes" (Decode.list noteDecoder))
+
+        "notes-found" ->
+            Decode.map2
+                (\requestId notes -> NotesFound { requestId = requestId, notes = notes })
                 (Decode.field "requestId" Decode.string)
                 (Decode.field "notes" (Decode.list noteDecoder))
 
