@@ -299,7 +299,7 @@ view model =
         , style "margin" "2rem auto"
         , style "padding" "0 1rem"
         ]
-        ([ h1 [] [ text "Elm + Supabase" ]
+        ([ headerRow model.state
          , p [ style "color" "#444" ] [ text "Personal knowledge tracker starter." ]
          , p [ style "padding" "0.5rem" ] [ text model.status ]
          ]
@@ -318,6 +318,24 @@ view model =
 
                     SignedIn ->
                         signedInView model.title model.body model.notes
+               )
+        )
+
+
+headerRow : State -> Html Msg
+headerRow state =
+    div
+        [ style "display" "flex"
+        , style "justify-content" "space-between"
+        , style "align-items" "center"
+        ]
+        (h1 [ style "margin" "0" ] [ text "Elm + Supabase" ]
+            :: (case state of
+                    SignedIn ->
+                        [ attemptButton "Sign out" AttemptSignOut ]
+
+                    _ ->
+                        []
                )
         )
 
