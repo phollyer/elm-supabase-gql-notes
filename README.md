@@ -5,7 +5,7 @@ Learning project for Elm + Supabase integration with production-minded defaults.
 ## Prerequisites
 
 - Node.js and npm
-- Elm 0.19.1
+- Elm 0.19.2
 - Supabase CLI
 
 ## Quick start
