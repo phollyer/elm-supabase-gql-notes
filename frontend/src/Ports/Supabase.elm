@@ -14,6 +14,7 @@ import Json.Encode as Encode
 
 type Command
     = InitializeSession { requestId : String }
+    | RefreshSession { requestId : String }
     | SignInWithPassword { requestId : String, email : String, password : String }
     | SignInWithMagicLink { requestId : String, email : String }
     | SignUpWithPassword { requestId : String, email : String, password : String }
@@ -66,6 +67,12 @@ encodeCommand command =
         InitializeSession payload ->
             Encode.object
                 [ ( "type", Encode.string "initialize-session" )
+                , ( "requestId", Encode.string payload.requestId )
+                ]
+
+        RefreshSession payload ->
+            Encode.object
+                [ ( "type", Encode.string "refresh-session" )
                 , ( "requestId", Encode.string payload.requestId )
                 ]
 

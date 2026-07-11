@@ -235,7 +235,7 @@ searchNotesCmd config accessToken query =
 
 refreshSessionCmd : Model -> Cmd Msg
 refreshSessionCmd model =
-    Supabase.sendCommand (Supabase.InitializeSession { requestId = nextRequestId model })
+    Supabase.sendCommand (Supabase.RefreshSession { requestId = nextRequestId model })
 
 
 subscriptions : Model -> Sub Msg

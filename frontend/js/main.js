@@ -3,6 +3,7 @@
 import { Elm } from '../src/Main.elm'
 import {
     initializeSession,
+    refreshSession,
     signInWithPassword,
     signUpWithPassword,
     signInWithMagicLink,
@@ -31,6 +32,10 @@ const run = async (message) => {
     switch (message.type) {
         case 'initialize-session':
             emit(await initializeSession(requestId))
+            return
+
+        case 'refresh-session':
+            emit(await refreshSession(requestId))
             return
 
         case 'sign-up-password':

@@ -26,6 +26,26 @@ export const initializeSession = async (requestId) => {
     }
 }
 
+export const refreshSession = async (requestId) => {
+    const { data, error } = await supabase.auth.refreshSession()
+    if (error) {
+        return toError(requestId, error)
+    }
+
+    const user = data?.session?.user
+    if (!user) {
+        return { type: 'session-missing', requestId }
+    }
+
+    return {
+        type: 'session-ready',
+        accessToken: data.session.access_token,
+        requestId,
+        userId: user.id,
+        email: user.email || ''
+    }
+}
+
 export const signInWithPassword = async (requestId, email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
