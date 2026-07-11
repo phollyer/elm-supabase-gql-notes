@@ -1,4 +1,8 @@
 create extension if not exists pgcrypto;
+create extension if not exists pg_graphql;
+
+-- Enable GraphQL schema introspection and inflect snake_case to camelCase.
+comment on schema public is e'@graphql({"introspection": true, "inflect_names": true})';
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -43,6 +47,11 @@ alter table public.notes enable row level security;
 grant usage on schema public to authenticated;
 grant select, insert, update on public.profiles to authenticated;
 grant select, insert, update, delete on public.notes to authenticated;
+
+-- service_role bypasses RLS but still needs table-level grants for introspection.
+grant usage on schema public to service_role;
+grant select, insert, update, delete on public.profiles to service_role;
+grant select, insert, update, delete on public.notes to service_role;
 
 create policy "profiles_select_own"
   on public.profiles

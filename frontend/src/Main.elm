@@ -1,9 +1,14 @@
 module Main exposing (main)
 
+import Api exposing (Datetime(..), Uuid(..))
 import Browser
+import CreateNote.CreateNote as CreateNote
+import GraphQL.Engine
 import Html exposing (Html, div, h1, h2, p, text)
 import Html.Attributes exposing (style, value)
+import Http
 import Json.Decode as Decode
+import Notes.GetNotes as GetNotes
 import Ports.Supabase as Supabase
 import String
 import UI.FormElements exposing (attemptButton, clearResultsButton, emailInput, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, passwordConfirmInput, passwordInput, searchButton, searchNotesInput)
@@ -16,6 +21,7 @@ type alias Model =
     , passwordError : Maybe String
     , passwordConfirm : String
     , passwordConfirmError : Maybe String
+    , userId : Maybe String
     , title : String
     , body : String
     , status : String
@@ -59,6 +65,8 @@ type Msg
     | TitleUpdated String
     | BodyUpdated String
     | SupabaseEventReceived Decode.Value
+    | GraphqlNotesLoaded (Result GraphQL.Engine.Error GetNotes.Response)
+    | GraphqlNoteCreated (Result GraphQL.Engine.Error CreateNote.Response)
 
 
 main : Program () Model Msg
@@ -73,27 +81,110 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    let
-        model =
-            { email = ""
-            , emailError = Nothing
-            , password = ""
-            , passwordError = Nothing
-            , passwordConfirm = ""
-            , passwordConfirmError = Nothing
-            , title = ""
-            , body = ""
-            , status = "Checking session..."
-            , state = Start
-            , notes = []
-            , searchQuery = ""
-            , searchResults = []
-            , nextId = 1
-            }
-    in
-    ( model
+    ( { userId = Nothing
+      , email = ""
+      , emailError = Nothing
+      , password = ""
+      , passwordError = Nothing
+      , passwordConfirm = ""
+      , passwordConfirmError = Nothing
+      , title = ""
+      , body = ""
+      , status = "Checking session..."
+      , state = Start
+      , notes = []
+      , searchQuery = ""
+      , searchResults = []
+      , nextId = 1
+      }
     , Supabase.sendCommand (Supabase.InitializeSession { requestId = "init-0" })
     )
+
+
+graphqlUrl : String
+graphqlUrl =
+    "http://localhost:54321/graphql/v1"
+
+
+graphqlHeaders : List Http.Header
+graphqlHeaders =
+    [ Http.header "apiKey" "REDACTED_SUPABASE_SECRET"
+    , Http.header "Authorization" "Bearer REDACTED_SUPABASE_SECRET"
+    ]
+
+
+uuidToString : Uuid -> String
+uuidToString (Uuid uuidStr) =
+    uuidStr
+
+
+datetimeToString : Datetime -> String
+datetimeToString (Datetime datetime) =
+    datetime
+
+
+toSupabaseCreatedNote : CreateNote.Records -> Supabase.Note
+toSupabaseCreatedNote { id, title, body, createdAt } =
+    { id = uuidToString id
+    , title = title
+    , body = body
+    , createdAt = datetimeToString createdAt
+    }
+
+
+flattenGetNotes : GetNotes.Response -> List GetNotes.Node
+flattenGetNotes response =
+    List.map .node response.notesCollection.edges
+
+
+toSupabaseNote : GetNotes.Node -> Supabase.Note
+toSupabaseNote { id, title, body, createdAt } =
+    { id = uuidToString id
+    , title = title
+    , body = body
+    , createdAt = datetimeToString createdAt
+    }
+
+
+getNotesToSupabaseNotes : GetNotes.Response -> List Supabase.Note
+getNotesToSupabaseNotes =
+    flattenGetNotes >> List.map toSupabaseNote
+
+
+applyGraphqlNotes : GetNotes.Response -> Model -> Model
+applyGraphqlNotes response model =
+    { model
+        | notes = getNotesToSupabaseNotes response
+        , status = "Notes loaded."
+    }
+
+
+createNoteCmd : String -> String -> String -> Cmd Msg
+createNoteCmd userId title body =
+    Cmd.map GraphqlNoteCreated <|
+        Api.mutation
+            (CreateNote.mutation
+                { userId = Uuid userId
+                , title = title
+                , body = body
+                }
+            )
+            { headers = graphqlHeaders
+            , url = graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
+
+
+fetchNotesCmd : Cmd Msg
+fetchNotesCmd =
+    Cmd.map GraphqlNotesLoaded <|
+        Api.query GetNotes.query
+            { headers = graphqlHeaders
+            , url = graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
 
 
 subscriptions : Model -> Sub Msg
@@ -253,7 +344,7 @@ update msg model =
 
         AttemptFetchNotes ->
             ( { model | status = "Loading notes..." }
-            , Supabase.sendCommand (Supabase.FetchNotes { requestId = nextRequestId model })
+            , fetchNotesCmd
             )
 
         AttemptCreateNote ->
@@ -261,15 +352,16 @@ update msg model =
                 ( { model | status = "Title is required." }, Cmd.none )
 
             else
-                ( { model | status = "Saving note..." }
-                , Supabase.sendCommand
-                    (Supabase.CreateNote
-                        { requestId = nextRequestId model
-                        , title = model.title
-                        , body = model.body
-                        }
-                    )
-                )
+                case model.userId of
+                    Just userId ->
+                        ( { model | status = "Creating note..." }
+                        , createNoteCmd userId model.title model.body
+                        )
+
+                    Nothing ->
+                        ( { model | status = "User ID is missing. Cannot create note." }
+                        , Supabase.sendCommand (Supabase.InitializeSession { requestId = nextRequestId model })
+                        )
 
         AttemptSearchNotes ->
             ( { model | status = "Searching notes..." }
@@ -280,6 +372,45 @@ update msg model =
                     }
                 )
             )
+
+        GraphqlNoteCreated result ->
+            case result of
+                Ok response ->
+                    case response.insertIntoNotesCollection of
+                        Just { records } ->
+                            case records of
+                                record :: _ ->
+                                    ( { model
+                                        | notes = toSupabaseCreatedNote record :: model.notes
+                                        , status = "Note created successfully."
+                                        , title = ""
+                                        , body = ""
+                                      }
+                                    , Cmd.none
+                                    )
+
+                                [] ->
+                                    ( { model | status = "Create mutation returned empty records list." }
+                                    , Cmd.none
+                                    )
+
+                        Nothing ->
+                            ( { model | status = "Create mutation returned no records." }
+                            , Cmd.none
+                            )
+
+                Err error ->
+                    ( { model | status = "GraphQL note creation failed: " ++ formatGraphqlError error }
+                    , Cmd.none
+                    )
+
+        GraphqlNotesLoaded result ->
+            case result of
+                Ok response ->
+                    ( applyGraphqlNotes response model, Cmd.none )
+
+                Err error ->
+                    ( { model | status = "GraphQL notes load failed: " ++ formatGraphqlError error }, Cmd.none )
 
         TitleUpdated value ->
             ( { model | title = value }, Cmd.none )
@@ -301,21 +432,39 @@ applyEvent event model =
     case event of
         Supabase.SessionReady payload ->
             ( { model
-                | state = SignedIn
+                | userId = Just payload.userId
+                , state = SignedIn
                 , status = "Session ready."
                 , email = payload.email
               }
-            , Supabase.sendCommand (Supabase.FetchNotes { requestId = nextRequestId model })
+            , fetchNotesCmd
             )
 
         Supabase.SessionMissing _ ->
-            ( { model | state = Start, notes = [], status = "You are signed out." }, Cmd.none )
+            ( { model
+                | userId = Nothing
+                , state = Start
+                , notes = []
+                , status = "You are signed out."
+              }
+            , Cmd.none
+            )
 
         Supabase.NotesLoaded payload ->
-            ( { model | notes = payload.notes, status = "Notes loaded." }, Cmd.none )
+            ( { model
+                | notes = payload.notes
+                , status = "Notes loaded."
+              }
+            , Cmd.none
+            )
 
         Supabase.NotesFound payload ->
-            ( { model | searchResults = payload.notes, status = "Notes found." }, Cmd.none )
+            ( { model
+                | searchResults = payload.notes
+                , status = "Notes found."
+              }
+            , Cmd.none
+            )
 
         Supabase.NoteCreated payload ->
             ( { model
@@ -328,7 +477,37 @@ applyEvent event model =
             )
 
         Supabase.ErrorRaised payload ->
-            ( { model | status = payload.message }, Cmd.none )
+            ( { model | status = payload.message }
+            , Cmd.none
+            )
+
+
+formatGraphqlError : GraphQL.Engine.Error -> String
+formatGraphqlError error =
+    case error of
+        GraphQL.Engine.BadUrl badUrl ->
+            "Bad URL: " ++ badUrl
+
+        GraphQL.Engine.Timeout ->
+            "Request timed out."
+
+        GraphQL.Engine.NetworkError ->
+            "Network error."
+
+        GraphQL.Engine.BadStatus badStatus ->
+            "HTTP " ++ String.fromInt badStatus.status ++ ": " ++ badStatus.responseBody
+
+        GraphQL.Engine.BadBody badBody ->
+            "Response decoding failed: " ++ badBody.decodingError
+
+        GraphQL.Engine.ErrorField field ->
+            case field.errors of
+                [] ->
+                    "GraphQL returned an empty errors list."
+
+                errors ->
+                    "GraphQL error: "
+                        ++ String.join ", " (List.map .message errors)
 
 
 nextRequestId : Model -> String
@@ -377,14 +556,15 @@ headerRow state =
         , style "justify-content" "space-between"
         , style "align-items" "center"
         ]
-        [ h1 [ style "margin" "0" ] [ text "Elm + Supabase" ]
+        [ h1 [ style "margin" "0" ] [ text "Elm + Supabase + GraphQL" ]
         , case state of
             SignedIn ->
                 div
                     [ style "display" "flex"
                     , style "gap" "0.5rem"
                     ]
-                    [ gotoButton "Search notes" GotoSearch
+                    [ attemptButton "Fetch notes" AttemptFetchNotes
+                    , gotoButton "Search notes" GotoSearch
                     , attemptButton "Sign out" AttemptSignOut
                     ]
 

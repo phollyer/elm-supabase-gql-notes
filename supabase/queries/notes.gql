@@ -1,0 +1,15 @@
+query GetNotes {
+  notesCollection(orderBy: [{ createdAt: DescNullsLast }]) {
+    edges {
+      node {
+        id
+        title
+        body
+        createdAt
+        updatedAt
+      }
+    }
+  }
+}
+
+

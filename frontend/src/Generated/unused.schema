@@ -1,0 +1,105 @@
+# This file is generated automatically when `elm-gql` is run.
+    #
+    # This captures all parts of the schema that were not used by any of your graphQL queries or mutations.
+
+    
+
+query {
+    node
+    notesByPk
+    profilesByPk
+    profilesCollection
+}
+
+
+mutation {
+    deleteFromNotesCollection
+    deleteFromProfilesCollection
+    insertIntoProfilesCollection
+    updateNotesCollection
+    updateProfilesCollection
+}
+
+
+enum {
+    FilterIs
+    OrderByDirection
+    __DirectiveLocation
+    __TypeKind
+}
+
+
+type Notes {
+    nodeId
+    userId
+}
+
+type NotesConnection {
+    pageInfo
+}
+
+type NotesDeleteResponse {
+    affectedCount
+    records
+}
+
+type NotesEdge {
+    cursor
+}
+
+type NotesInsertResponse {
+    affectedCount
+}
+
+type NotesUpdateResponse {
+    affectedCount
+    records
+}
+
+type PageInfo {
+    endCursor
+    hasNextPage
+    hasPreviousPage
+    startCursor
+}
+
+type Profiles {
+    createdAt
+    displayName
+    email
+    id
+    nodeId
+    updatedAt
+}
+
+type ProfilesConnection {
+    edges
+    pageInfo
+}
+
+type ProfilesDeleteResponse {
+    affectedCount
+    records
+}
+
+type ProfilesEdge {
+    cursor
+    node
+}
+
+type ProfilesInsertResponse {
+    affectedCount
+    records
+}
+
+type ProfilesUpdateResponse {
+    affectedCount
+    records
+}
+
+
+
+interface Node {
+    nodeId
+}
+

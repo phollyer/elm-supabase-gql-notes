@@ -1,0 +1,14 @@
+
+mutation CreateNote($userId: UUID!, $title: String!, $body: String!) {
+    insertIntoNotesCollection(
+        objects: [{ userId: $userId, title: $title, body: $body }]
+        ) {
+        records {
+        id
+        title
+        body
+        createdAt
+        updatedAt
+    }
+    }
+}
