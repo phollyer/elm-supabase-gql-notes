@@ -1,10 +1,19 @@
-module Notes.GetNotes exposing (Edges, Node, NotesCollection, Response, query)
+module SearchNotes.SearchNotes exposing
+    ( Edges
+    , Input
+    , Node
+    , NotesCollection
+    , Response
+    , query
+    )
 
 {-|
-This file is generated from ../supabase/queries/notes.gql using `elm-gql`
+This file is generated from ../supabase/queries/searchNotes.gql using `elm-gql`
 
 Please avoid modifying directly.
 
+
+@docs Input
 
 @docs Response
 
@@ -19,15 +28,28 @@ Please avoid modifying directly.
 import Api
 import GraphQL.Decode
 import GraphQL.Engine
+import GraphQL.InputObject
 import Json.Decode
+import Json.Encode
 
 
-query : Api.Query Response
-query =
+type alias Input =
+    { query : String }
+
+
+query : Input -> Api.Query Response
+query args =
     GraphQL.Engine.operation
-        (Just "GetNotes")
+        (Just "SearchNotes")
         (\version_ ->
-             { args = []
+             { args =
+                 GraphQL.InputObject.toFieldList
+                     (GraphQL.InputObject.inputObject
+                          "Input" |> GraphQL.InputObject.addField
+                                             "query"
+                                             "String!"
+                                             (Json.Encode.string args.query)
+                     )
              , body = toPayload_ version_
              , fragments = toFragments_ version_
              }
@@ -91,9 +113,13 @@ decoder_ version_ =
 
 toPayload_ : Int -> String
 toPayload_ version_ =
-    GraphQL.Engine.versionedAlias
-        version_
-        "notesCollection" ++ """ (orderBy: [{createdAt: DescNullsLast}]) {edges {node {id
+    ((((GraphQL.Engine.versionedAlias
+            version_
+            "notesCollection" ++ " (filter: {or: [{title: {ilike: "
+       ) ++ GraphQL.Engine.versionedName version_ "$query"
+      ) ++ "}}, {body: {ilike: "
+     ) ++ GraphQL.Engine.versionedName version_ "$query"
+    ) ++ """}}]}, orderBy: [{createdAt: DescNullsLast}]) {edges {node {id
 title
 body
 createdAt

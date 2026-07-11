@@ -1,0 +1,21 @@
+query SearchNotes($query: String!) {
+  notesCollection(
+    filter: {
+      or: [
+        { title: { ilike: $query } }
+        { body: { ilike: $query } }
+      ]
+    }
+    orderBy: [{ createdAt: DescNullsLast }]
+  ) {
+    edges {
+      node {
+        id
+        title
+        body
+        createdAt
+        updatedAt
+      }
+    }
+  }
+}

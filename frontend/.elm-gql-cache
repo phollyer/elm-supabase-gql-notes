@@ -1,1 +1,1 @@
-{"engineVersion":"0.13.0","files":{"Api":{"../supabase/queries/createNote.gql":{"modified":"2026-07-11T15:42:30.547Z"},"../supabase/queries/notes.gql":{"modified":"2026-07-11T13:39:01.527Z"}}}}
+{"engineVersion":"0.13.0","files":{"Api":{"../supabase/queries/createNote.gql":{"modified":"2026-07-11T15:42:30.547Z"},"../supabase/queries/notes.gql":{"modified":"2026-07-11T13:39:01.527Z"},"../supabase/queries/searchNotes.gql":{"modified":"2026-07-11T19:11:21.480Z"}}}}

@@ -10,6 +10,7 @@ import Http
 import Json.Decode as Decode
 import Notes.GetNotes as GetNotes
 import Ports.Supabase as Supabase
+import SearchNotes.SearchNotes as SearchNotes
 import String
 import UI.FormElements exposing (attemptButton, clearResultsButton, emailInput, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, passwordConfirmInput, passwordInput, searchButton, searchNotesInput)
 
@@ -115,6 +116,7 @@ type Msg
     | SupabaseEventReceived Decode.Value
     | GraphqlNotesLoaded (Result GraphQL.Engine.Error GetNotes.Response)
     | GraphqlNoteCreated (Result GraphQL.Engine.Error CreateNote.Response)
+    | GraphqlSearchNotesLoaded (Result GraphQL.Engine.Error SearchNotes.Response)
 
 
 graphqlHeaders : String -> String -> List Http.Header
@@ -148,8 +150,22 @@ flattenGetNotes response =
     List.map .node response.notesCollection.edges
 
 
+flattenSearchNotes : SearchNotes.Response -> List SearchNotes.Node
+flattenSearchNotes response =
+    List.map .node response.notesCollection.edges
+
+
 toSupabaseNote : GetNotes.Node -> Supabase.Note
 toSupabaseNote { id, title, body, createdAt } =
+    { id = uuidToString id
+    , title = title
+    , body = body
+    , createdAt = datetimeToString createdAt
+    }
+
+
+toSupabaseSearchNote : SearchNotes.Node -> Supabase.Note
+toSupabaseSearchNote { id, title, body, createdAt } =
     { id = uuidToString id
     , title = title
     , body = body
@@ -160,6 +176,11 @@ toSupabaseNote { id, title, body, createdAt } =
 getNotesToSupabaseNotes : GetNotes.Response -> List Supabase.Note
 getNotesToSupabaseNotes =
     flattenGetNotes >> List.map toSupabaseNote
+
+
+getSearchNotesToSupabaseNotes : SearchNotes.Response -> List Supabase.Note
+getSearchNotesToSupabaseNotes =
+    flattenSearchNotes >> List.map toSupabaseSearchNote
 
 
 applyGraphqlNotes : GetNotes.Response -> Model -> Model
@@ -198,6 +219,25 @@ fetchNotesCmd config accessToken =
             }
 
 
+searchNotesCmd : Config -> String -> String -> Cmd Msg
+searchNotesCmd config accessToken query =
+    Cmd.map GraphqlSearchNotesLoaded <|
+        Api.query
+            (SearchNotes.query
+                { query = "%" ++ query ++ "%" }
+            )
+            { headers = graphqlHeaders config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
+
+
+refreshSessionCmd : Model -> Cmd Msg
+refreshSessionCmd model =
+    Supabase.sendCommand (Supabase.InitializeSession { requestId = nextRequestId model })
+
+
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Supabase.supabaseIn SupabaseEventReceived
@@ -208,7 +248,7 @@ update msg model =
     case msg of
         StartSessionCheck ->
             ( { model | status = "Checking session..." }
-            , Supabase.sendCommand (Supabase.InitializeSession { requestId = nextRequestId model })
+            , refreshSessionCmd model
             )
 
         GotoStart ->
@@ -362,7 +402,7 @@ update msg model =
 
                 Nothing ->
                     ( { model | status = "No access token. Re-checking session..." }
-                    , Supabase.sendCommand (Supabase.InitializeSession { requestId = nextRequestId model })
+                    , refreshSessionCmd model
                     )
 
         AttemptCreateNote ->
@@ -378,18 +418,20 @@ update msg model =
 
                     _ ->
                         ( { model | status = "Session info missing. Re-checking session..." }
-                        , Supabase.sendCommand (Supabase.InitializeSession { requestId = nextRequestId model })
+                        , refreshSessionCmd model
                         )
 
         AttemptSearchNotes ->
-            ( { model | status = "Searching notes..." }
-            , Supabase.sendCommand
-                (Supabase.SearchNotes
-                    { requestId = nextRequestId model
-                    , query = model.searchQuery
-                    }
-                )
-            )
+            case model.accessToken of
+                Just accessToken ->
+                    ( { model | status = "Searching notes..." }
+                    , searchNotesCmd model.config accessToken model.searchQuery
+                    )
+
+                Nothing ->
+                    ( { model | status = "No access token. Re-checking session..." }
+                    , refreshSessionCmd model
+                    )
 
         GraphqlNoteCreated result ->
             case result of
@@ -418,9 +460,7 @@ update msg model =
                             )
 
                 Err error ->
-                    ( { model | status = "GraphQL note creation failed: " ++ formatGraphqlError error }
-                    , Cmd.none
-                    )
+                    handleGraphqlFailure "GraphQL note creation failed" error model
 
         GraphqlNotesLoaded result ->
             case result of
@@ -428,7 +468,20 @@ update msg model =
                     ( applyGraphqlNotes response model, Cmd.none )
 
                 Err error ->
-                    ( { model | status = "GraphQL notes load failed: " ++ formatGraphqlError error }, Cmd.none )
+                    handleGraphqlFailure "GraphQL notes load failed" error model
+
+        GraphqlSearchNotesLoaded result ->
+            case result of
+                Ok response ->
+                    ( { model
+                        | searchResults = getSearchNotesToSupabaseNotes response
+                        , status = "Search completed."
+                      }
+                    , Cmd.none
+                    )
+
+                Err error ->
+                    handleGraphqlFailure "GraphQL search failed" error model
 
         TitleUpdated value ->
             ( { model | title = value }, Cmd.none )
@@ -528,6 +581,29 @@ formatGraphqlError error =
                 errors ->
                     "GraphQL error: "
                         ++ String.join ", " (List.map .message errors)
+
+
+isGraphqlAuthError : GraphQL.Engine.Error -> Bool
+isGraphqlAuthError error =
+    case error of
+        GraphQL.Engine.BadStatus badStatus ->
+            badStatus.status == 401
+
+        _ ->
+            False
+
+
+handleGraphqlFailure : String -> GraphQL.Engine.Error -> Model -> ( Model, Cmd Msg )
+handleGraphqlFailure prefix error model =
+    if isGraphqlAuthError error then
+        ( { model | status = prefix ++ ": session expired, refreshing..." }
+        , refreshSessionCmd model
+        )
+
+    else
+        ( { model | status = prefix ++ ": " ++ formatGraphqlError error }
+        , Cmd.none
+        )
 
 
 nextRequestId : Model -> String
