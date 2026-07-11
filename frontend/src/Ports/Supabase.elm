@@ -24,7 +24,7 @@ type Command
 
 
 type Event
-    = SessionReady { requestId : String, userId : String, email : String }
+    = SessionReady { requestId : String, accessToken : String, userId : String, email : String }
     | SessionMissing { requestId : String }
     | NotesLoaded { requestId : String, notes : List Note }
     | NotesFound { requestId : String, notes : List Note }
@@ -135,11 +135,12 @@ decodeByType : String -> Decoder Event
 decodeByType eventType =
     case eventType of
         "session-ready" ->
-            Decode.map3
-                (\requestId userId email ->
-                    SessionReady { requestId = requestId, userId = userId, email = email }
+            Decode.map4
+                (\requestId accessToken userId email ->
+                    SessionReady { requestId = requestId, accessToken = accessToken, userId = userId, email = email }
                 )
                 (Decode.field "requestId" Decode.string)
+                (Decode.field "accessToken" Decode.string)
                 (Decode.field "userId" Decode.string)
                 (Decode.field "email" Decode.string)
 

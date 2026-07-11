@@ -10,8 +10,15 @@ import {
 } from './supabase/auth.js'
 import { createNote, fetchNotes, searchNotes } from './supabase/data.js'
 
+const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY
+const graphqlUrl = `${import.meta.env.VITE_SUPABASE_URL}/graphql/v1`
+
 const app = Elm.Main.init({
-    node: document.getElementById('app')
+    node: document.getElementById('app'),
+    flags: {
+        publishableKey,
+        graphqlUrl
+    }
 })
 
 const emit = (event) => {

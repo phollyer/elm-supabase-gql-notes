@@ -19,6 +19,7 @@ export const initializeSession = async (requestId) => {
 
     return {
         type: 'session-ready',
+        accessToken: data.session.access_token,
         requestId,
         userId: user.id,
         email: user.email || ''
@@ -38,6 +39,7 @@ export const signInWithPassword = async (requestId, email, password) => {
 
     return {
         type: 'session-ready',
+        accessToken: data.session.access_token,
         requestId,
         userId: user.id,
         email: user.email || ''
@@ -71,6 +73,7 @@ export const signUpWithPassword = async (requestId, email, password) => {
 
     return {
         type: 'session-ready',
+        accessToken: session.access_token,
         requestId,
         userId: user.id,
         email: user.email || ''

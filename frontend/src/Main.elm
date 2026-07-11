@@ -14,6 +14,16 @@ import String
 import UI.FormElements exposing (attemptButton, clearResultsButton, emailInput, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, passwordConfirmInput, passwordInput, searchButton, searchNotesInput)
 
 
+main : Program Flags Model Msg
+main =
+    Browser.element
+        { init = init
+        , view = view
+        , update = update
+        , subscriptions = subscriptions
+        }
+
+
 type alias Model =
     { email : String
     , emailError : Maybe String
@@ -21,6 +31,8 @@ type alias Model =
     , passwordError : Maybe String
     , passwordConfirm : String
     , passwordConfirmError : Maybe String
+    , config : Config
+    , accessToken : Maybe String
     , userId : Maybe String
     , title : String
     , body : String
@@ -31,6 +43,42 @@ type alias Model =
     , searchResults : List Supabase.Note
     , nextId : Int
     }
+
+
+type alias Config =
+    { graphqlUrl : String
+    , publishableKey : String
+    }
+
+
+type alias Flags =
+    { publishableKey : String
+    , graphqlUrl : String
+    }
+
+
+init : Flags -> ( Model, Cmd Msg )
+init flags =
+    ( { email = ""
+      , emailError = Nothing
+      , password = ""
+      , passwordError = Nothing
+      , passwordConfirm = ""
+      , passwordConfirmError = Nothing
+      , config = { graphqlUrl = flags.graphqlUrl, publishableKey = flags.publishableKey }
+      , accessToken = Nothing
+      , userId = Nothing
+      , title = ""
+      , body = ""
+      , status = "Checking session..."
+      , state = Start
+      , notes = []
+      , searchQuery = ""
+      , searchResults = []
+      , nextId = 1
+      }
+    , Supabase.sendCommand (Supabase.InitializeSession { requestId = "init-0" })
+    )
 
 
 type State
@@ -69,47 +117,10 @@ type Msg
     | GraphqlNoteCreated (Result GraphQL.Engine.Error CreateNote.Response)
 
 
-main : Program () Model Msg
-main =
-    Browser.element
-        { init = init
-        , view = view
-        , update = update
-        , subscriptions = subscriptions
-        }
-
-
-init : () -> ( Model, Cmd Msg )
-init _ =
-    ( { userId = Nothing
-      , email = ""
-      , emailError = Nothing
-      , password = ""
-      , passwordError = Nothing
-      , passwordConfirm = ""
-      , passwordConfirmError = Nothing
-      , title = ""
-      , body = ""
-      , status = "Checking session..."
-      , state = Start
-      , notes = []
-      , searchQuery = ""
-      , searchResults = []
-      , nextId = 1
-      }
-    , Supabase.sendCommand (Supabase.InitializeSession { requestId = "init-0" })
-    )
-
-
-graphqlUrl : String
-graphqlUrl =
-    "http://localhost:54321/graphql/v1"
-
-
-graphqlHeaders : List Http.Header
-graphqlHeaders =
-    [ Http.header "apiKey" "REDACTED_SUPABASE_SECRET"
-    , Http.header "Authorization" "Bearer REDACTED_SUPABASE_SECRET"
+graphqlHeaders : String -> String -> List Http.Header
+graphqlHeaders publishableKey accessToken =
+    [ Http.header "apiKey" publishableKey
+    , Http.header "Authorization" ("Bearer " ++ accessToken)
     ]
 
 
@@ -159,8 +170,8 @@ applyGraphqlNotes response model =
     }
 
 
-createNoteCmd : String -> String -> String -> Cmd Msg
-createNoteCmd userId title body =
+createNoteCmd : Config -> String -> String -> String -> String -> Cmd Msg
+createNoteCmd config accessToken userId title body =
     Cmd.map GraphqlNoteCreated <|
         Api.mutation
             (CreateNote.mutation
@@ -169,19 +180,19 @@ createNoteCmd userId title body =
                 , body = body
                 }
             )
-            { headers = graphqlHeaders
-            , url = graphqlUrl
+            { headers = graphqlHeaders config.publishableKey accessToken
+            , url = config.graphqlUrl
             , timeout = Nothing
             , tracker = Nothing
             }
 
 
-fetchNotesCmd : Cmd Msg
-fetchNotesCmd =
+fetchNotesCmd : Config -> String -> Cmd Msg
+fetchNotesCmd config accessToken =
     Cmd.map GraphqlNotesLoaded <|
         Api.query GetNotes.query
-            { headers = graphqlHeaders
-            , url = graphqlUrl
+            { headers = graphqlHeaders config.publishableKey accessToken
+            , url = config.graphqlUrl
             , timeout = Nothing
             , tracker = Nothing
             }
@@ -343,23 +354,30 @@ update msg model =
             )
 
         AttemptFetchNotes ->
-            ( { model | status = "Loading notes..." }
-            , fetchNotesCmd
-            )
+            case model.accessToken of
+                Just accessToken ->
+                    ( { model | status = "Loading notes..." }
+                    , fetchNotesCmd model.config accessToken
+                    )
+
+                Nothing ->
+                    ( { model | status = "No access token. Re-checking session..." }
+                    , Supabase.sendCommand (Supabase.InitializeSession { requestId = nextRequestId model })
+                    )
 
         AttemptCreateNote ->
             if String.isEmpty model.title then
                 ( { model | status = "Title is required." }, Cmd.none )
 
             else
-                case model.userId of
-                    Just userId ->
+                case ( model.accessToken, model.userId ) of
+                    ( Just accessToken, Just userId ) ->
                         ( { model | status = "Creating note..." }
-                        , createNoteCmd userId model.title model.body
+                        , createNoteCmd model.config accessToken userId model.title model.body
                         )
 
-                    Nothing ->
-                        ( { model | status = "User ID is missing. Cannot create note." }
+                    _ ->
+                        ( { model | status = "Session info missing. Re-checking session..." }
                         , Supabase.sendCommand (Supabase.InitializeSession { requestId = nextRequestId model })
                         )
 
@@ -432,17 +450,19 @@ applyEvent event model =
     case event of
         Supabase.SessionReady payload ->
             ( { model
-                | userId = Just payload.userId
+                | accessToken = Just payload.accessToken
+                , userId = Just payload.userId
                 , state = SignedIn
                 , status = "Session ready."
                 , email = payload.email
               }
-            , fetchNotesCmd
+            , fetchNotesCmd model.config payload.accessToken
             )
 
         Supabase.SessionMissing _ ->
             ( { model
-                | userId = Nothing
+                | accessToken = Nothing
+                , userId = Nothing
                 , state = Start
                 , notes = []
                 , status = "You are signed out."
