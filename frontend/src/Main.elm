@@ -13,6 +13,7 @@ import Ports.Supabase as Supabase
 import SearchNotes.SearchNotes as SearchNotes
 import String
 import UI.FormElements exposing (attemptButton, clearResultsButton, emailInput, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, passwordConfirmInput, passwordInput, searchButton, searchNotesInput)
+import UpdateNote.UpdateNote as UpdateNote
 
 
 main : Program Flags Model Msg
@@ -39,6 +40,7 @@ type alias Model =
     , body : String
     , status : String
     , state : State
+    , currentNote : Maybe Supabase.Note
     , notes : List Supabase.Note
     , searchQuery : String
     , searchResults : List Supabase.Note
@@ -73,6 +75,7 @@ init flags =
       , body = ""
       , status = "Checking session..."
       , state = Start
+      , currentNote = Nothing
       , notes = []
       , searchQuery = ""
       , searchResults = []
@@ -89,6 +92,7 @@ type State
     | MagicLink
     | SignedIn
     | Search
+    | Edit
 
 
 type Msg
@@ -101,21 +105,24 @@ type Msg
     | AttemptMagicLinkSignIn
     | AttemptSignOut
     | AttemptCreateNote
+    | AttemptUpdateNote
+    | AttemptFetchNotes
     | AttemptSearchNotes
     | SearchQueryUpdated String
     | ClearResults
-    | AttemptFetchNotes
     | GotoStart
     | GotoSignUp
     | GotoSignIn
     | GotoMagicLink
     | GotoNotes
     | GotoSearch
+    | GotoEditNote Supabase.Note
     | TitleUpdated String
     | BodyUpdated String
     | SupabaseEventReceived Decode.Value
     | GraphqlNotesLoaded (Result GraphQL.Engine.Error GetNotes.Response)
     | GraphqlNoteCreated (Result GraphQL.Engine.Error CreateNote.Response)
+    | GraphqlNoteUpdated (Result GraphQL.Engine.Error UpdateNote.Response)
     | GraphqlSearchNotesLoaded (Result GraphQL.Engine.Error SearchNotes.Response)
 
 
@@ -142,6 +149,17 @@ toSupabaseCreatedNote { id, title, body, createdAt } =
     , title = title
     , body = body
     , createdAt = datetimeToString createdAt
+    , updatedAt = datetimeToString createdAt
+    }
+
+
+toSupabaseUpdateNote : UpdateNote.Records -> Supabase.Note
+toSupabaseUpdateNote { id, title, body, createdAt, updatedAt } =
+    { id = uuidToString id
+    , title = title
+    , body = body
+    , createdAt = datetimeToString createdAt
+    , updatedAt = datetimeToString updatedAt
     }
 
 
@@ -156,20 +174,22 @@ flattenSearchNotes response =
 
 
 toSupabaseNote : GetNotes.Node -> Supabase.Note
-toSupabaseNote { id, title, body, createdAt } =
+toSupabaseNote { id, title, body, createdAt, updatedAt } =
     { id = uuidToString id
     , title = title
     , body = body
     , createdAt = datetimeToString createdAt
+    , updatedAt = datetimeToString updatedAt
     }
 
 
 toSupabaseSearchNote : SearchNotes.Node -> Supabase.Note
-toSupabaseSearchNote { id, title, body, createdAt } =
+toSupabaseSearchNote { id, title, body, createdAt, updatedAt } =
     { id = uuidToString id
     , title = title
     , body = body
     , createdAt = datetimeToString createdAt
+    , updatedAt = datetimeToString updatedAt
     }
 
 
@@ -199,6 +219,23 @@ createNoteCmd config accessToken userId title body =
                 { userId = Uuid userId
                 , title = title
                 , body = body
+                }
+            )
+            { headers = graphqlHeaders config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
+
+
+updateNoteCmd : Config -> String -> Supabase.Note -> Cmd Msg
+updateNoteCmd config accessToken note =
+    Cmd.map GraphqlNoteUpdated <|
+        Api.mutation
+            (UpdateNote.mutation
+                { id = Uuid note.id
+                , title = note.title
+                , body = note.body
                 }
             )
             { headers = graphqlHeaders config.publishableKey accessToken
@@ -279,6 +316,17 @@ update msg model =
             ( { model
                 | status = "Please sign in with magic link."
                 , state = MagicLink
+              }
+            , Cmd.none
+            )
+
+        GotoEditNote note ->
+            ( { model
+                | title = note.title
+                , body = note.body
+                , currentNote = Just note
+                , status = "Editing note..."
+                , state = Edit
               }
             , Cmd.none
             )
@@ -421,6 +469,26 @@ update msg model =
                         , refreshSessionCmd model
                         )
 
+        AttemptUpdateNote ->
+            if String.isEmpty model.title then
+                ( { model | status = "Title is required." }, Cmd.none )
+
+            else
+                case ( model.accessToken, model.currentNote ) of
+                    ( Just accessToken, Just note ) ->
+                        ( { model | status = "Updating note..." }
+                        , updateNoteCmd model.config accessToken <|
+                            { note
+                                | title = model.title
+                                , body = model.body
+                            }
+                        )
+
+                    _ ->
+                        ( { model | status = "Session info missing. Re-checking session..." }
+                        , refreshSessionCmd model
+                        )
+
         AttemptSearchNotes ->
             case model.accessToken of
                 Just accessToken ->
@@ -461,6 +529,39 @@ update msg model =
 
                 Err error ->
                     handleGraphqlFailure "GraphQL note creation failed" error model
+
+        GraphqlNoteUpdated result ->
+            case result of
+                Ok response ->
+                    case response.updateNotesCollection.records of
+                        record :: _ ->
+                            let
+                                updatedNote =
+                                    toSupabaseUpdateNote record
+                            in
+                            ( { model
+                                | notes =
+                                    List.map
+                                        (\n ->
+                                            if n.id == updatedNote.id then
+                                                updatedNote
+
+                                            else
+                                                n
+                                        )
+                                        model.notes
+                                , status = "Note updated successfully."
+                              }
+                            , Cmd.none
+                            )
+
+                        [] ->
+                            ( { model | status = "Update mutation returned empty records list." }
+                            , Cmd.none
+                            )
+
+                Err error ->
+                    handleGraphqlFailure "GraphQL note update failed" error model
 
         GraphqlNotesLoaded result ->
             case result of
@@ -641,6 +742,9 @@ view model =
 
                     Search ->
                         searchNotesView model.searchQuery model.searchResults
+
+                    Edit ->
+                        editNoteView model.title model.body
                )
         )
 
@@ -713,6 +817,16 @@ signedInView title body notes =
 {- ######### Notes View ######### -}
 
 
+editNoteView : String -> String -> List (Html Msg)
+editNoteView title body =
+    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Edit Note" ]
+    , notesTitleInput title TitleUpdated
+    , notesContentInput body BodyUpdated
+    , attemptButton "Update note" AttemptUpdateNote
+    , gotoButton "Back to Notes" GotoNotes
+    ]
+
+
 searchNotesView : String -> List Supabase.Note -> List (Html Msg)
 searchNotesView searchQuery searchResults =
     [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Search Notes" ]
@@ -746,4 +860,5 @@ noteCard note =
         ]
         [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text note.title ]
         , p [ style "margin" "0" ] [ text note.body ]
+        , gotoButton "Edit" (GotoEditNote note)
         ]

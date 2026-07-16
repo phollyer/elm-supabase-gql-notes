@@ -16,7 +16,6 @@ mutation {
     deleteFromNotesCollection
     deleteFromProfilesCollection
     insertIntoProfilesCollection
-    updateNotesCollection
     updateProfilesCollection
 }
 
@@ -53,7 +52,6 @@ type NotesInsertResponse {
 
 type NotesUpdateResponse {
     affectedCount
-    records
 }
 
 type PageInfo {

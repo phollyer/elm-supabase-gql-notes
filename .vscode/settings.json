@@ -3,5 +3,6 @@
         "**/node_modules/**": true,
         "**/dist/**": true,
         "**/elm-stuff/**": true
-    }
+    },
+    "elmLS.elmReviewDiagnostics": "off"
 }

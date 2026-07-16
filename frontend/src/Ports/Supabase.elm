@@ -38,16 +38,18 @@ type alias Note =
     , title : String
     , body : String
     , createdAt : String
+    , updatedAt : String
     }
 
 
 noteDecoder : Decoder Note
 noteDecoder =
-    Decode.map4 Note
+    Decode.map5 Note
         (Decode.field "id" Decode.string)
         (Decode.field "title" Decode.string)
         (Decode.field "body" Decode.string)
         (Decode.field "created_at" Decode.string)
+        (Decode.field "updated_at" Decode.string)
 
 
 port supabaseOut : Encode.Value -> Cmd msg

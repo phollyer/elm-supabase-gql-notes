@@ -1,0 +1,15 @@
+mutation UpdateNote($id: UUID!, $title: String!, $body: String!) {
+    updateNotesCollection(
+        set: { title: $title, body: $body }
+        filter: { id: { eq: $id } }
+        atMost: 1
+    ) {
+        records {
+            id
+            title
+            body
+            createdAt
+            updatedAt
+        }
+    }
+}
