@@ -13,7 +13,6 @@ query {
 
 
 mutation {
-    deleteFromNotesCollection
     deleteFromProfilesCollection
     insertIntoProfilesCollection
     updateProfilesCollection
@@ -39,7 +38,6 @@ type NotesConnection {
 
 type NotesDeleteResponse {
     affectedCount
-    records
 }
 
 type NotesEdge {

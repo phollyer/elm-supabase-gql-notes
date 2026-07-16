@@ -3,6 +3,7 @@ module Main exposing (main)
 import Api exposing (Datetime(..), Uuid(..))
 import Browser
 import CreateNote.CreateNote as CreateNote
+import DeleteNote.DeleteNote as DeleteNote
 import GraphQL.Engine
 import Html exposing (Html, div, h1, h2, p, text)
 import Html.Attributes exposing (style, value)
@@ -93,6 +94,13 @@ type State
     | SignedIn
     | Search
     | Edit
+    | Delete DeleteState
+
+
+type DeleteState
+    = DeleteReady
+    | DeleteSuccess
+    | DeleteFailure
 
 
 type Msg
@@ -105,6 +113,8 @@ type Msg
     | AttemptMagicLinkSignIn
     | AttemptSignOut
     | AttemptCreateNote
+    | AttemptDeleteNote
+    | AttemptReinstateNote
     | AttemptUpdateNote
     | AttemptFetchNotes
     | AttemptSearchNotes
@@ -117,11 +127,14 @@ type Msg
     | GotoNotes
     | GotoSearch
     | GotoEditNote Supabase.Note
+    | GotoDeleteNote Supabase.Note
     | TitleUpdated String
     | BodyUpdated String
     | SupabaseEventReceived Decode.Value
     | GraphqlNotesLoaded (Result GraphQL.Engine.Error GetNotes.Response)
     | GraphqlNoteCreated (Result GraphQL.Engine.Error CreateNote.Response)
+    | GraphqlNoteDeleted (Result GraphQL.Engine.Error DeleteNote.Response)
+    | GraphqlNoteReinstated (Result GraphQL.Engine.Error CreateNote.Response)
     | GraphqlNoteUpdated (Result GraphQL.Engine.Error UpdateNote.Response)
     | GraphqlSearchNotesLoaded (Result GraphQL.Engine.Error SearchNotes.Response)
 
@@ -220,6 +233,37 @@ createNoteCmd config accessToken userId title body =
                 , title = title
                 , body = body
                 }
+            )
+            { headers = graphqlHeaders config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
+
+
+reinstateNoteCmd : Config -> String -> String -> String -> String -> Cmd Msg
+reinstateNoteCmd config accessToken userId title body =
+    Cmd.map GraphqlNoteReinstated <|
+        Api.mutation
+            (CreateNote.mutation
+                { userId = Uuid userId
+                , title = title
+                , body = body
+                }
+            )
+            { headers = graphqlHeaders config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
+
+
+deleteNoteCmd : Config -> String -> Supabase.Note -> Cmd Msg
+deleteNoteCmd config accessToken note =
+    Cmd.map GraphqlNoteDeleted <|
+        Api.mutation
+            (DeleteNote.mutation
+                { id = Uuid note.id }
             )
             { headers = graphqlHeaders config.publishableKey accessToken
             , url = config.graphqlUrl
@@ -327,6 +371,15 @@ update msg model =
                 , currentNote = Just note
                 , status = "Editing note..."
                 , state = Edit
+              }
+            , Cmd.none
+            )
+
+        GotoDeleteNote note ->
+            ( { model
+                | currentNote = Just note
+                , status = "Confirm Delete"
+                , state = Delete DeleteReady
               }
             , Cmd.none
             )
@@ -469,6 +522,41 @@ update msg model =
                         , refreshSessionCmd model
                         )
 
+        AttemptDeleteNote ->
+            case ( model.accessToken, model.currentNote ) of
+                ( Just accessToken, Just note ) ->
+                    ( { model | status = "Deleting note..." }
+                    , deleteNoteCmd model.config accessToken note
+                    )
+
+                ( Nothing, _ ) ->
+                    ( { model | status = "Session info missing. Re-checking session..." }
+                    , refreshSessionCmd model
+                    )
+
+                ( _, Nothing ) ->
+                    ( { model | status = "No note selected for deletion." }, Cmd.none )
+
+        AttemptReinstateNote ->
+            case ( model.accessToken, model.userId, model.currentNote ) of
+                ( Just accessToken, Just userId, Just currentNote ) ->
+                    ( { model | status = "Reinstating note..." }
+                    , reinstateNoteCmd model.config accessToken userId currentNote.title currentNote.body
+                    )
+
+                ( Nothing, _, _ ) ->
+                    ( { model | status = "Session info missing. Re-checking session..." }
+                    , refreshSessionCmd model
+                    )
+
+                ( _, Nothing, _ ) ->
+                    ( { model | status = "Session info missing. Re-checking session..." }
+                    , refreshSessionCmd model
+                    )
+
+                ( _, _, Nothing ) ->
+                    ( { model | status = "No note selected for reinstatement." }, Cmd.none )
+
         AttemptUpdateNote ->
             if String.isEmpty model.title then
                 ( { model | status = "Title is required." }, Cmd.none )
@@ -511,6 +599,65 @@ update msg model =
                                     ( { model
                                         | notes = toSupabaseCreatedNote record :: model.notes
                                         , status = "Note created successfully."
+                                        , title = ""
+                                        , body = ""
+                                      }
+                                    , Cmd.none
+                                    )
+
+                                [] ->
+                                    ( { model | status = "Create mutation returned empty records list." }
+                                    , Cmd.none
+                                    )
+
+                        Nothing ->
+                            ( { model | status = "Create mutation returned no records." }
+                            , Cmd.none
+                            )
+
+                Err error ->
+                    handleGraphqlFailure "GraphQL note creation failed" error model
+
+        GraphqlNoteDeleted result ->
+            case result of
+                Ok response ->
+                    case response.deleteFromNotesCollection.records of
+                        record :: _ ->
+                            let
+                                deletedNoteId =
+                                    uuidToString record.id
+                            in
+                            ( { model
+                                | notes =
+                                    List.filter (\n -> n.id /= deletedNoteId) model.notes
+                                , status = "Note deleted successfully."
+                                , currentNote = Just (toSupabaseNote record)
+                                , state = Delete DeleteSuccess
+                              }
+                            , Cmd.none
+                            )
+
+                        [] ->
+                            ( { model
+                                | status = "Delete mutation returned empty records list."
+                                , state = Delete DeleteFailure
+                              }
+                            , Cmd.none
+                            )
+
+                Err error ->
+                    handleGraphqlFailure "GraphQL note deletion failed" error model
+
+        GraphqlNoteReinstated result ->
+            case result of
+                Ok response ->
+                    case response.insertIntoNotesCollection of
+                        Just { records } ->
+                            case records of
+                                record :: _ ->
+                                    ( { model
+                                        | notes = toSupabaseCreatedNote record :: model.notes
+                                        , status = "Note reinstated successfully."
                                         , title = ""
                                         , body = ""
                                       }
@@ -745,6 +892,9 @@ view model =
 
                     Edit ->
                         editNoteView model.title model.body
+
+                    Delete state ->
+                        deleteNoteView state model.currentNote
                )
         )
 
@@ -817,6 +967,36 @@ signedInView title body notes =
 {- ######### Notes View ######### -}
 
 
+deleteNoteView : DeleteState -> Maybe Supabase.Note -> List (Html Msg)
+deleteNoteView state maybeNote =
+    case maybeNote of
+        Just note ->
+            [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Delete Note" ]
+            , div
+                [ style "border" "1px solid #ddd"
+                , style "padding" "0.75rem"
+                , style "border-radius" "0.5rem"
+                , style "margin-bottom" "0.5rem"
+                ]
+                [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text note.title ]
+                , p [ style "margin" "0" ] [ text note.body ]
+                ]
+            , case state of
+                DeleteReady ->
+                    attemptButton "Confirm Delete" AttemptDeleteNote
+
+                DeleteSuccess ->
+                    attemptButton "Reinstate" AttemptReinstateNote
+
+                DeleteFailure ->
+                    div [] []
+            , gotoButton "Back to Notes" GotoNotes
+            ]
+
+        Nothing ->
+            []
+
+
 editNoteView : String -> String -> List (Html Msg)
 editNoteView title body =
     [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Edit Note" ]
@@ -861,4 +1041,5 @@ noteCard note =
         [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text note.title ]
         , p [ style "margin" "0" ] [ text note.body ]
         , gotoButton "Edit" (GotoEditNote note)
+        , gotoButton "Delete" (GotoDeleteNote note)
         ]
