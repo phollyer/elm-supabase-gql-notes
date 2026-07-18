@@ -184,6 +184,31 @@ datetimeToString (Datetime datetime) =
     datetime
 
 
+nextRequestId : Model -> String
+nextRequestId model =
+    "req-" ++ String.fromInt model.nextId
+
+
+flattenGetNotes : GetActiveNotes.Response -> List GetActiveNotes.Node
+flattenGetNotes response =
+    List.map .node response.notesCollection.edges
+
+
+flattenSearchNotes : SearchNotes.Response -> List SearchNotes.Node
+flattenSearchNotes response =
+    List.map .node response.notesCollection.edges
+
+
+getNotesToSupabaseNotes : GetActiveNotes.Response -> List Supabase.Note
+getNotesToSupabaseNotes =
+    flattenGetNotes >> List.map toSupabaseNote
+
+
+getSearchNotesToSupabaseNotes : SearchNotes.Response -> List Supabase.Note
+getSearchNotesToSupabaseNotes =
+    flattenSearchNotes >> List.map toSupabaseSearchNote
+
+
 toSupabaseCreatedNote : CreateNote.Records -> Supabase.Note
 toSupabaseCreatedNote { id, title, body, createdAt } =
     { id = uuidToString id
@@ -217,16 +242,6 @@ toSupabaseDeleteNoteSoft { id, title, body, createdAt, updatedAt, deletedAt } =
     }
 
 
-flattenGetNotes : GetActiveNotes.Response -> List GetActiveNotes.Node
-flattenGetNotes response =
-    List.map .node response.notesCollection.edges
-
-
-flattenSearchNotes : SearchNotes.Response -> List SearchNotes.Node
-flattenSearchNotes response =
-    List.map .node response.notesCollection.edges
-
-
 toSupabaseNote : GetActiveNotes.Node -> Supabase.Note
 toSupabaseNote { id, title, body, createdAt, updatedAt, deletedAt } =
     { id = uuidToString id
@@ -247,16 +262,6 @@ toSupabaseSearchNote { id, title, body, createdAt, updatedAt, deletedAt } =
     , updatedAt = datetimeToString updatedAt
     , deletedAt = Maybe.map datetimeToString deletedAt
     }
-
-
-getNotesToSupabaseNotes : GetActiveNotes.Response -> List Supabase.Note
-getNotesToSupabaseNotes =
-    flattenGetNotes >> List.map toSupabaseNote
-
-
-getSearchNotesToSupabaseNotes : SearchNotes.Response -> List Supabase.Note
-getSearchNotesToSupabaseNotes =
-    flattenSearchNotes >> List.map toSupabaseSearchNote
 
 
 createNoteCmd : Config -> String -> String -> String -> String -> Cmd Msg
@@ -1074,11 +1079,6 @@ handleGraphqlFailure prefix error model =
         ( { model | status = Just (Error (prefix ++ ": " ++ formatGraphqlError error)) }
         , Cmd.none
         )
-
-
-nextRequestId : Model -> String
-nextRequestId model =
-    "req-" ++ String.fromInt model.nextId
 
 
 view : Model -> Html Msg
