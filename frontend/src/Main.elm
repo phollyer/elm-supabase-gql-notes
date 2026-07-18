@@ -424,7 +424,7 @@ update msg model =
 
         GotoSignIn ->
             ( { model
-                | status = Just (Info "Please sign in")
+                | status = Nothing
                 , state = SignIn
                 , email = ""
                 , password = ""
@@ -434,7 +434,7 @@ update msg model =
 
         GotoMagicLink ->
             ( { model
-                | status = Just (Info "Please sign in with magic link")
+                | status = Just (Info "Use the magic link to sign in via email")
                 , state = MagicLink
               }
             , Cmd.none
@@ -445,7 +445,7 @@ update msg model =
                 | title = ""
                 , body = ""
                 , currentNote = Nothing
-                , status = Just (Info "Create Note")
+                , status = Nothing
                 , state = SignedIn CreatingNote
               }
             , Cmd.none
@@ -456,7 +456,7 @@ update msg model =
                 | title = note.title
                 , body = note.body
                 , currentNote = Just note
-                , status = Just (Info "Editing note...")
+                , status = Nothing
                 , state = SignedIn EditingNote
               }
             , Cmd.none
@@ -465,7 +465,7 @@ update msg model =
         GotoDeleteNote note ->
             ( { model
                 | currentNote = Just note
-                , status = Just (Warning "Confirm Delete")
+                , status = Just (Warning "Permanently delete this note?")
                 , state = SignedIn (DeleteNote DeleteReady)
               }
             , Cmd.none
@@ -474,7 +474,7 @@ update msg model =
         GotoTrashNote note ->
             ( { model
                 | currentNote = Just note
-                , status = Just (Warning "Send note to the trash")
+                , status = Just (Warning "This will put your note in the trash. You can restore it later.")
                 , state = SignedIn (TrashingNote DeleteReady)
               }
             , Cmd.none
@@ -482,7 +482,7 @@ update msg model =
 
         GotoNotes ->
             ( { model
-                | status = Just (Info "Viewing notes...")
+                | status = Nothing
                 , state = SignedIn ViewingNotes
               }
             , Cmd.none
@@ -490,7 +490,7 @@ update msg model =
 
         GotoSearch ->
             ( { model
-                | status = Just (Info "Search notes...")
+                | status = Nothing
                 , state = SignedIn SearchingNotes
               }
             , Cmd.none
@@ -543,7 +543,7 @@ update msg model =
             in
             case ( emailError, passwordError, passwordConfirmError ) of
                 ( Nothing, Nothing, Nothing ) ->
-                    ( { newModel | status = Just (Info "Signing up with password...") }
+                    ( { newModel | status = Nothing }
                     , Supabase.sendCommand
                         (Supabase.SignUpWithPassword
                             { requestId = nextRequestId model
@@ -557,11 +557,33 @@ update msg model =
                     ( { newModel | status = Just (Error "Please fix the errors below") }, Cmd.none )
 
         AttemptPasswordSignIn ->
-            if String.isEmpty model.email || String.isEmpty model.password then
-                ( { model | status = Just (Error "Email and password are required") }, Cmd.none )
+            if String.isEmpty model.email && String.isEmpty model.password then
+                ( { model
+                    | status = Just (Error "Please fix the errors below")
+                    , emailError = Just "Email is required"
+                    , passwordError = Just "Password is required"
+                  }
+                , Cmd.none
+                )
+
+            else if String.isEmpty model.email then
+                ( { model
+                    | status = Just (Error "Please fix the errors below")
+                    , emailError = Just "Email is required"
+                  }
+                , Cmd.none
+                )
+
+            else if String.isEmpty model.password then
+                ( { model
+                    | status = Just (Error "Please fix the errors below")
+                    , passwordError = Just "Password is required"
+                  }
+                , Cmd.none
+                )
 
             else
-                ( { model | status = Just (Info "Signing in with password...") }
+                ( { model | status = Just (Info "Signing in...") }
                 , Supabase.sendCommand
                     (Supabase.SignInWithPassword
                         { requestId = nextRequestId model
@@ -573,7 +595,12 @@ update msg model =
 
         AttemptMagicLinkSignIn ->
             if String.isEmpty model.email then
-                ( { model | status = Just (Error "Email is required for magic link") }, Cmd.none )
+                ( { model
+                    | status = Just (Error "Please fix the errors below")
+                    , emailError = Just "Email is required"
+                  }
+                , Cmd.none
+                )
 
             else
                 ( { model | status = Just (Info "Sending magic link...") }
@@ -616,7 +643,7 @@ update msg model =
 
         AttemptCreateNote ->
             if String.isEmpty model.title then
-                ( { model | status = Just (Error "Title is required") }, Cmd.none )
+                ( { model | status = Just (Error "Please fix the errors below") }, Cmd.none )
 
             else
                 case ( model.accessToken, model.userId ) of
@@ -648,7 +675,7 @@ update msg model =
         AttemptDeleteNoteSoft ->
             case ( model.accessToken, model.currentNote ) of
                 ( Just accessToken, Just note ) ->
-                    ( { model | status = Just (Info "Soft deleting note...") }
+                    ( { model | status = Just (Info "Sending your note to the trash...") }
                     , softDeleteNoteCmd model.config accessToken note
                     )
 
@@ -682,7 +709,7 @@ update msg model =
 
         AttemptUpdateNote ->
             if String.isEmpty model.title then
-                ( { model | status = Just (Error "Title is required.") }, Cmd.none )
+                ( { model | status = Just (Error "Please fix the errors below") }, Cmd.none )
 
             else
                 case ( model.accessToken, model.currentNote ) of
@@ -729,12 +756,12 @@ update msg model =
                                     )
 
                                 [] ->
-                                    ( { model | status = Just (Error "Create mutation returned empty records list") }
+                                    ( { model | status = Just (Error "Create mutation returned an empty records list; likely causes: INSERT happened but no row was returned by the GraphQL selection, or RLS limited visible rows") }
                                     , Cmd.none
                                     )
 
                         Nothing ->
-                            ( { model | status = Just (Error "Create mutation returned no records") }
+                            ( { model | status = Just (Error "Create mutation returned null for insertIntoNotesCollection; likely causes: mutation field resolved to null due to permissions, schema mismatch, or upstream GraphQL resolver failure") }
                             , Cmd.none
                             )
 
@@ -758,7 +785,7 @@ update msg model =
                             ( { model
                                 | notes =
                                     List.filter (\n -> n.id /= deletedNoteId) model.notes
-                                , status = Just (Success "Note deleted successfully.")
+                                , status = Just (Success "Note deleted successfully")
                                 , currentNote = Nothing
                                 , state = SignedIn (DeleteNote DeleteSuccess)
                               }
@@ -944,7 +971,7 @@ applyEvent event model =
                 | accessToken = Just payload.accessToken
                 , userId = Just payload.userId
                 , state = SignedIn ViewReady
-                , status = Just (Success "Session ready.")
+                , status = Nothing
                 , email = payload.email
               }
             , Cmd.none
@@ -1084,7 +1111,7 @@ view model =
 
             _ ->
                 div [] []
-         , p [ style "padding" "0.5rem" ] [ statusView model.status ]
+         , statusView model.status
          ]
             ++ (case model.state of
                     Start ->
@@ -1190,10 +1217,10 @@ statusView maybeStatus =
     in
     case ( styles, message ) of
         ( [], "" ) ->
-            div [] []
+            div [ style "display" "none" ] []
 
         _ ->
-            div
+            p
                 (styles
                     ++ [ style "padding" "0.5rem"
                        , style "border-radius" "0.75rem"
