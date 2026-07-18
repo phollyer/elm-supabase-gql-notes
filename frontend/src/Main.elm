@@ -252,7 +252,7 @@ applyGraphqlNotes : GetActiveNotes.Response -> Model -> Model
 applyGraphqlNotes response model =
     { model
         | notes = getNotesToSupabaseNotes response
-        , status = "Notes loaded."
+        , status = "Notes loaded"
         , state = SignedIn ViewingNotes
     }
 
@@ -928,7 +928,7 @@ applyEvent event model =
                 , userId = Nothing
                 , state = Start
                 , notes = []
-                , status = "You are signed out."
+                , status = "You are signed out"
               }
             , Cmd.none
             )
@@ -936,7 +936,7 @@ applyEvent event model =
         Supabase.NotesLoaded payload ->
             ( { model
                 | notes = payload.notes
-                , status = "Notes loaded."
+                , status = "Notes loaded"
               }
             , Cmd.none
             )
@@ -944,7 +944,7 @@ applyEvent event model =
         Supabase.NotesFound payload ->
             ( { model
                 | searchResults = payload.notes
-                , status = "Notes found."
+                , status = "Notes found"
               }
             , Cmd.none
             )
@@ -954,7 +954,7 @@ applyEvent event model =
                 | notes = payload.note :: model.notes
                 , title = ""
                 , body = ""
-                , status = "Note saved."
+                , status = "Note saved"
               }
             , Cmd.none
             )
@@ -1036,18 +1036,28 @@ view model =
                     [ style "display" "flex"
                     , style "gap" "0.5rem"
                     ]
-                    [ attemptButton "Fetch notes" AttemptFetchNotes
-                    , gotoButton "Search notes" GotoSearch
-                    , attemptButton "Fetch Trash" AttemptFetchTrash
-                    , attemptButton "Sign out" AttemptSignOut
+                    [ div
+                        [ style "display" "flex"
+                        , style "gap" "0.5rem"
+                        ]
+                        [ attemptButton "Notes" AttemptFetchNotes
+                        , gotoButton "Search" GotoSearch
+                        ]
+                    , div
+                        [ style "display" "flex"
+                        , style "gap" "0.5rem"
+                        , style "margin-left" "auto"
+                        ]
+                        [ attemptButton "Trash" AttemptFetchTrash
+                        , attemptButton "Sign out" AttemptSignOut
+                        ]
                     ]
 
             _ ->
                 div [] []
-         , p [ style "color" "#444" ] [ text "Personal knowledge tracker starter." ]
          , p [ style "padding" "0.5rem" ] [ text model.status ]
          ]
-            ++ (case model.state |> Debug.log "View State" of
+            ++ (case model.state of
                     Start ->
                         selectView
 
@@ -1064,7 +1074,7 @@ view model =
                         [ div [] [ text "Welcome! Please fetch your notes." ] ]
 
                     SignedIn ViewingNotes ->
-                        signedInNotesView model.title model.body model.notes
+                        signedInNotesView model.notes
 
                     SignedIn ViewingTrash ->
                         signedInTrashView model.trashedNotes
@@ -1090,6 +1100,7 @@ headerRow =
         [ style "display" "flex"
         , style "justify-content" "space-between"
         , style "align-items" "center"
+        , style "margin-bottom" "1rem"
         ]
         [ h1 [ style "margin" "0" ] [ text "Elm + Supabase + GraphQL" ]
         ]
@@ -1130,13 +1141,19 @@ magicLinkView email =
     ]
 
 
-signedInNotesView : String -> String -> List Supabase.Note -> List (Html Msg)
-signedInNotesView title body notes =
-    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Notes" ]
+createNoteView : String -> String -> List (Html Msg)
+createNoteView title body =
+    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Create Note" ]
     , notesTitleInput title TitleUpdated
     , notesContentInput body BodyUpdated
     , attemptButton "Create note" AttemptCreateNote
-    , h2 [ style "font-size" "1.1rem", style "margin-top" "1.5rem" ] [ text "Your notes" ]
+    , gotoButton "Back to Notes" GotoNotes
+    ]
+
+
+signedInNotesView : List Supabase.Note -> List (Html Msg)
+signedInNotesView notes =
+    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Notes" ]
     , div [ style "margin-top" "1rem" ] (List.map noteCard notes)
     ]
 
@@ -1245,8 +1262,14 @@ noteCard note =
         ]
         [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text note.title ]
         , p [ style "margin" "0" ] [ text note.body ]
-        , gotoButton "Edit" (GotoEditNote note)
-        , gotoButton "Trash Note" (GotoTrashNote note)
+        , div
+            [ style "display" "flex"
+            , style "gap" "0.5rem"
+            , style "margin-top" "0.5rem"
+            ]
+            [ gotoButton "Edit" (GotoEditNote note)
+            , gotoButton "Trash Note" (GotoTrashNote note)
+            ]
         ]
 
 
