@@ -1083,7 +1083,10 @@ view model =
                         [ selectView ]
 
                     SignUp ->
-                        signUpView model.email model.password model.passwordConfirm
+                        signUpView
+                            ( model.email, model.emailError )
+                            ( model.password, model.passwordError )
+                            ( model.passwordConfirm, model.passwordConfirmError )
 
                     SignIn ->
                         signInView model.email model.password
@@ -1189,16 +1192,35 @@ selectView =
         ]
 
 
-signUpView : String -> String -> String -> List (Html Msg)
-signUpView email password passwordConfirm =
+signUpView : ( String, Maybe String ) -> ( String, Maybe String ) -> ( String, Maybe String ) -> List (Html Msg)
+signUpView ( email, emailError ) ( password, passwordError ) ( passwordConfirm, passwordConfirmError ) =
     [ emailInput email EmailUpdated
+    , errorView emailError
     , passwordInput password PasswordUpdated
+    , errorView passwordError
     , passwordConfirmInput passwordConfirm PasswordConfirmUpdated
+    , errorView passwordConfirmError
     , buttons
         [ gotoStartButton GotoStart
         , attemptButton "Sign up" AttemptPasswordSignUp
         ]
     ]
+
+
+errorView : Maybe String -> Html Msg
+errorView maybeError =
+    case maybeError of
+        Just errorMsg ->
+            div
+                [ style "background-color" "#b91c1c"
+                , style "color" "#ffffff"
+                , style "padding" "0.5rem"
+                , style "border-radius" "0.75rem"
+                ]
+                [ text errorMsg ]
+
+        Nothing ->
+            div [] []
 
 
 signInView : String -> String -> List (Html Msg)
