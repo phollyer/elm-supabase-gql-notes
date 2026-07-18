@@ -41,6 +41,7 @@ type alias Model =
     , accessToken : Maybe String
     , userId : Maybe String
     , title : String
+    , titleError : Maybe String
     , body : String
     , status : Maybe Status
     , state : State
@@ -77,6 +78,7 @@ init flags =
       , accessToken = Nothing
       , userId = Nothing
       , title = ""
+      , titleError = Nothing
       , body = ""
       , status = Just (Info "Checking session...")
       , state = Start
@@ -643,7 +645,12 @@ update msg model =
 
         AttemptCreateNote ->
             if String.isEmpty model.title then
-                ( { model | status = Just (Error "Please fix the errors below") }, Cmd.none )
+                ( { model
+                    | status = Just (Error "Please fix the errors below")
+                    , titleError = Just "Title is required"
+                  }
+                , Cmd.none
+                )
 
             else
                 case ( model.accessToken, model.userId ) of
@@ -750,6 +757,7 @@ update msg model =
                                         | notes = toSupabaseCreatedNote record :: model.notes
                                         , status = Just (Success "Note created successfully")
                                         , title = ""
+                                        , titleError = Nothing
                                         , body = ""
                                       }
                                     , Cmd.none
@@ -899,6 +907,7 @@ update msg model =
                                                 n
                                         )
                                         model.notes
+                                , titleError = Nothing
                                 , status = Just (Success "Note updated successfully")
                               }
                             , Cmd.none
@@ -1153,10 +1162,10 @@ view model =
                         searchNotesView model.searchQuery model.searchResults
 
                     SignedIn CreatingNote ->
-                        createNoteView model.title model.body
+                        createNoteView ( model.title, model.titleError ) model.body
 
                     SignedIn EditingNote ->
-                        editNoteView model.title model.body
+                        editNoteView ( model.title, model.titleError ) model.body
 
                     SignedIn (DeleteNote state) ->
                         deleteNoteView state model.currentNote
@@ -1282,10 +1291,11 @@ magicLinkView email =
     ]
 
 
-createNoteView : String -> String -> List (Html Msg)
-createNoteView title body =
+createNoteView : ( String, Maybe String ) -> String -> List (Html Msg)
+createNoteView ( title, titleError ) body =
     [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Create Note" ]
     , notesTitleInput title TitleUpdated
+    , errorView titleError
     , notesContentInput body BodyUpdated
     , buttons
         [ attemptButton "Create note" AttemptCreateNote
@@ -1377,10 +1387,11 @@ trashingNoteView state maybeNote =
             []
 
 
-editNoteView : String -> String -> List (Html Msg)
-editNoteView title body =
+editNoteView : ( String, Maybe String ) -> String -> List (Html Msg)
+editNoteView ( title, titleError ) body =
     [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Edit Note" ]
     , notesTitleInput title TitleUpdated
+    , errorView titleError
     , notesContentInput body BodyUpdated
     , buttons
         [ attemptButton "Update note" AttemptUpdateNote
