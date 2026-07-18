@@ -42,7 +42,7 @@ type alias Model =
     , userId : Maybe String
     , title : String
     , body : String
-    , status : String
+    , status : Maybe Status
     , state : State
     , currentNote : Maybe Supabase.Note
     , notes : List Supabase.Note
@@ -78,7 +78,7 @@ init flags =
       , userId = Nothing
       , title = ""
       , body = ""
-      , status = "Checking session..."
+      , status = Just (Info "Checking session...")
       , state = Start
       , currentNote = Nothing
       , notes = []
@@ -89,6 +89,13 @@ init flags =
       }
     , Supabase.sendCommand (Supabase.InitializeSession { requestId = "init-0" })
     )
+
+
+type Status
+    = Success String
+    | Error String
+    | Warning String
+    | Info String
 
 
 type State
@@ -254,7 +261,7 @@ applyGraphqlNotes : GetActiveNotes.Response -> Model -> Model
 applyGraphqlNotes response model =
     { model
         | notes = getNotesToSupabaseNotes response
-        , status = "Notes loaded"
+        , status = Just (Success "Notes loaded")
         , state = SignedIn ViewingNotes
     }
 
@@ -389,13 +396,13 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         StartSessionCheck ->
-            ( { model | status = "Checking session..." }
+            ( { model | status = Just (Info "Checking session...") }
             , refreshSessionCmd model
             )
 
         GotoStart ->
             ( { model
-                | status = "Please sign in or sign up"
+                | status = Just (Info "Please sign in or sign up")
                 , state = Start
               }
             , Cmd.none
@@ -403,7 +410,7 @@ update msg model =
 
         GotoSignUp ->
             ( { model
-                | status = "Registering user..."
+                | status = Just (Info "Registering user...")
                 , state = SignUp
               }
             , Cmd.none
@@ -411,7 +418,7 @@ update msg model =
 
         GotoSignIn ->
             ( { model
-                | status = "Please sign in"
+                | status = Just (Info "Please sign in")
                 , state = SignIn
               }
             , Cmd.none
@@ -419,7 +426,7 @@ update msg model =
 
         GotoMagicLink ->
             ( { model
-                | status = "Please sign in with magic link"
+                | status = Just (Info "Please sign in with magic link")
                 , state = MagicLink
               }
             , Cmd.none
@@ -430,7 +437,7 @@ update msg model =
                 | title = ""
                 , body = ""
                 , currentNote = Nothing
-                , status = "Create Note"
+                , status = Just (Info "Create Note")
                 , state = SignedIn CreatingNote
               }
             , Cmd.none
@@ -441,7 +448,7 @@ update msg model =
                 | title = note.title
                 , body = note.body
                 , currentNote = Just note
-                , status = "Editing note..."
+                , status = Just (Info "Editing note...")
                 , state = SignedIn EditingNote
               }
             , Cmd.none
@@ -450,7 +457,7 @@ update msg model =
         GotoDeleteNote note ->
             ( { model
                 | currentNote = Just note
-                , status = "Confirm Delete"
+                , status = Just (Warning "Confirm Delete")
                 , state = SignedIn (DeleteNote DeleteReady)
               }
             , Cmd.none
@@ -459,7 +466,7 @@ update msg model =
         GotoTrashNote note ->
             ( { model
                 | currentNote = Just note
-                , status = "Send note to the trash"
+                , status = Just (Warning "Send note to the trash")
                 , state = SignedIn (TrashingNote DeleteReady)
               }
             , Cmd.none
@@ -467,7 +474,7 @@ update msg model =
 
         GotoNotes ->
             ( { model
-                | status = "Viewing notes..."
+                | status = Just (Info "Viewing notes...")
                 , state = SignedIn ViewingNotes
               }
             , Cmd.none
@@ -475,7 +482,7 @@ update msg model =
 
         GotoSearch ->
             ( { model
-                | status = "Search notes..."
+                | status = Just (Info "Search notes...")
                 , state = SignedIn SearchingNotes
               }
             , Cmd.none
@@ -528,7 +535,7 @@ update msg model =
             in
             case ( emailError, passwordError, passwordConfirmError ) of
                 ( Nothing, Nothing, Nothing ) ->
-                    ( { newModel | status = "Signing up with password..." }
+                    ( { newModel | status = Just (Info "Signing up with password...") }
                     , Supabase.sendCommand
                         (Supabase.SignUpWithPassword
                             { requestId = nextRequestId model
@@ -539,14 +546,14 @@ update msg model =
                     )
 
                 _ ->
-                    ( { newModel | status = "Please fix the errors below" }, Cmd.none )
+                    ( { newModel | status = Just (Error "Please fix the errors below") }, Cmd.none )
 
         AttemptPasswordSignIn ->
             if String.isEmpty model.email || String.isEmpty model.password then
-                ( { model | status = "Email and password are required" }, Cmd.none )
+                ( { model | status = Just (Error "Email and password are required") }, Cmd.none )
 
             else
-                ( { model | status = "Signing in with password..." }
+                ( { model | status = Just (Info "Signing in with password...") }
                 , Supabase.sendCommand
                     (Supabase.SignInWithPassword
                         { requestId = nextRequestId model
@@ -558,10 +565,10 @@ update msg model =
 
         AttemptMagicLinkSignIn ->
             if String.isEmpty model.email then
-                ( { model | status = "Email is required for magic link" }, Cmd.none )
+                ( { model | status = Just (Error "Email is required for magic link") }, Cmd.none )
 
             else
-                ( { model | status = "Sending magic link..." }
+                ( { model | status = Just (Info "Sending magic link...") }
                 , Supabase.sendCommand
                     (Supabase.SignInWithMagicLink
                         { requestId = nextRequestId model
@@ -571,108 +578,108 @@ update msg model =
                 )
 
         AttemptSignOut ->
-            ( { model | status = "Signing out..." }
+            ( { model | status = Just (Info "Signing out...") }
             , Supabase.sendCommand (Supabase.SignOut { requestId = nextRequestId model })
             )
 
         AttemptFetchNotes ->
             case model.accessToken of
                 Just accessToken ->
-                    ( { model | status = "Loading notes..." }
+                    ( { model | status = Just (Info "Loading notes...") }
                     , fetchNotesCmd model.config accessToken
                     )
 
                 Nothing ->
-                    ( { model | status = "No access token. Re-checking session..." }
+                    ( { model | status = Just (Error "No access token. Re-checking session...") }
                     , refreshSessionCmd model
                     )
 
         AttemptFetchTrash ->
             case model.accessToken of
                 Just accessToken ->
-                    ( { model | status = "Loading trash..." }
+                    ( { model | status = Just (Info "Loading trash...") }
                     , fetchTrashCmd model.config accessToken
                     )
 
                 Nothing ->
-                    ( { model | status = "No access token. Re-checking session..." }
+                    ( { model | status = Just (Error "No access token. Re-checking session...") }
                     , refreshSessionCmd model
                     )
 
         AttemptCreateNote ->
             if String.isEmpty model.title then
-                ( { model | status = "Title is required" }, Cmd.none )
+                ( { model | status = Just (Error "Title is required") }, Cmd.none )
 
             else
                 case ( model.accessToken, model.userId ) of
                     ( Just accessToken, Just userId ) ->
-                        ( { model | status = "Creating note..." }
+                        ( { model | status = Just (Info "Creating note...") }
                         , createNoteCmd model.config accessToken userId model.title model.body
                         )
 
                     _ ->
-                        ( { model | status = "Session info missing. Re-checking session..." }
+                        ( { model | status = Just (Error "Session info missing. Re-checking session...") }
                         , refreshSessionCmd model
                         )
 
         AttemptDeleteNoteHard ->
             case ( model.accessToken, model.currentNote ) of
                 ( Just accessToken, Just note ) ->
-                    ( { model | status = "Deleting note..." }
+                    ( { model | status = Just (Info "Deleting note...") }
                     , hardDeleteNoteCmd model.config accessToken note
                     )
 
                 ( Nothing, _ ) ->
-                    ( { model | status = "Session info missing. Re-checking session..." }
+                    ( { model | status = Just (Error "Session info missing. Re-checking session...") }
                     , refreshSessionCmd model
                     )
 
                 ( _, Nothing ) ->
-                    ( { model | status = "No note selected for deletion" }, Cmd.none )
+                    ( { model | status = Just (Error "No note selected for deletion") }, Cmd.none )
 
         AttemptDeleteNoteSoft ->
             case ( model.accessToken, model.currentNote ) of
                 ( Just accessToken, Just note ) ->
-                    ( { model | status = "Soft deleting note..." }
+                    ( { model | status = Just (Info "Soft deleting note...") }
                     , softDeleteNoteCmd model.config accessToken note
                     )
 
                 ( Nothing, _ ) ->
-                    ( { model | status = "Session info missing. Re-checking session..." }
+                    ( { model | status = Just (Error "Session info missing. Re-checking session...") }
                     , refreshSessionCmd model
                     )
 
                 ( _, Nothing ) ->
-                    ( { model | status = "No note selected for deletion" }, Cmd.none )
+                    ( { model | status = Just (Error "No note selected for deletion") }, Cmd.none )
 
         AttemptRestoreNote note ->
             case ( model.accessToken, model.userId ) of
                 ( Just accessToken, Just userId ) ->
                     ( { model
-                        | status = "Restoring note..."
+                        | status = Just (Info "Restoring note...")
                         , currentNote = Just note
                       }
                     , restoreNoteCmd model.config accessToken userId note
                     )
 
                 ( Nothing, _ ) ->
-                    ( { model | status = "Session info missing. Re-checking session..." }
+                    ( { model | status = Just (Error "Session info missing. Re-checking session...") }
                     , refreshSessionCmd model
                     )
 
                 ( _, Nothing ) ->
-                    ( { model | status = "Session info missing. Re-checking session..." }
+                    ( { model | status = Just (Error "Session info missing. Re-checking session...") }
                     , refreshSessionCmd model
                     )
 
         AttemptUpdateNote ->
             if String.isEmpty model.title then
-                ( { model | status = "Title is required." }, Cmd.none )
+                ( { model | status = Just (Error "Title is required.") }, Cmd.none )
 
             else
                 case ( model.accessToken, model.currentNote ) of
                     ( Just accessToken, Just note ) ->
-                        ( { model | status = "Updating note..." }
+                        ( { model | status = Just (Info "Updating note...") }
                         , updateNoteCmd model.config accessToken <|
                             { note
                                 | title = model.title
@@ -681,19 +688,19 @@ update msg model =
                         )
 
                     _ ->
-                        ( { model | status = "Session info missing. Re-checking session..." }
+                        ( { model | status = Just (Error "Session info missing. Re-checking session...") }
                         , refreshSessionCmd model
                         )
 
         AttemptSearchNotes ->
             case model.accessToken of
                 Just accessToken ->
-                    ( { model | status = "Searching notes..." }
+                    ( { model | status = Just (Info "Searching notes...") }
                     , searchNotesCmd model.config accessToken model.searchQuery
                     )
 
                 Nothing ->
-                    ( { model | status = "No access token. Re-checking session..." }
+                    ( { model | status = Just (Error "No access token. Re-checking session...") }
                     , refreshSessionCmd model
                     )
 
@@ -706,7 +713,7 @@ update msg model =
                                 record :: _ ->
                                     ( { model
                                         | notes = toSupabaseCreatedNote record :: model.notes
-                                        , status = "Note created successfully"
+                                        , status = Just (Success "Note created successfully")
                                         , title = ""
                                         , body = ""
                                       }
@@ -714,12 +721,12 @@ update msg model =
                                     )
 
                                 [] ->
-                                    ( { model | status = "Create mutation returned empty records list" }
+                                    ( { model | status = Just (Error "Create mutation returned empty records list") }
                                     , Cmd.none
                                     )
 
                         Nothing ->
-                            ( { model | status = "Create mutation returned no records" }
+                            ( { model | status = Just (Error "Create mutation returned no records") }
                             , Cmd.none
                             )
 
@@ -743,7 +750,7 @@ update msg model =
                             ( { model
                                 | notes =
                                     List.filter (\n -> n.id /= deletedNoteId) model.notes
-                                , status = "Note deleted successfully."
+                                , status = Just (Success "Note deleted successfully.")
                                 , currentNote = Nothing
                                 , state = SignedIn (DeleteNote DeleteSuccess)
                               }
@@ -752,7 +759,7 @@ update msg model =
 
                         0 ->
                             ( { model
-                                | status = "Delete mutation did not affect any records"
+                                | status = Just (Error "Delete mutation did not affect any records")
                                 , state = SignedIn (DeleteNote DeleteFailure)
                               }
                             , Cmd.none
@@ -760,7 +767,7 @@ update msg model =
 
                         _ ->
                             ( { model
-                                | status = "Delete mutation affected multiple records, which is unexpected"
+                                | status = Just (Error "Delete mutation affected multiple records, which is unexpected")
                                 , state = SignedIn (DeleteNote DeleteFailure)
                               }
                             , Cmd.none
@@ -782,7 +789,7 @@ update msg model =
                                 | notes =
                                     List.filter (\n -> n.id /= deletedNoteId) model.notes
                                 , trashedNotes = toSupabaseNote record :: model.trashedNotes
-                                , status = "Note has been trashed successfully"
+                                , status = Just (Success "Note has been trashed successfully")
                                 , currentNote = Nothing
                                 , state = SignedIn (TrashingNote DeleteSuccess)
                               }
@@ -791,7 +798,7 @@ update msg model =
 
                         [] ->
                             ( { model
-                                | status = "Soft delete mutation returned empty records list"
+                                | status = Just (Error "Soft delete mutation returned empty records list")
                                 , state = SignedIn (TrashingNote DeleteFailure)
                               }
                             , Cmd.none
@@ -815,22 +822,22 @@ update msg model =
                                         | notes = restoredNote :: model.notes
                                         , trashedNotes =
                                             List.filter (\n -> n.id /= note.id) model.trashedNotes
-                                        , status = "Note restored successfully"
+                                        , status = Just (Success "Note restored successfully")
                                         , currentNote = Nothing
                                       }
                                     , Cmd.none
                                     )
 
                                 Nothing ->
-                                    ( { model | status = "No current note to restore" }, Cmd.none )
+                                    ( { model | status = Just (Error "No current note to restore") }, Cmd.none )
 
                         0 ->
-                            ( { model | status = "Restore mutation returned no records" }
+                            ( { model | status = Just (Error "Restore mutation returned no records") }
                             , Cmd.none
                             )
 
                         _ ->
-                            ( { model | status = "Restore mutation affected multiple records, which is unexpected" }
+                            ( { model | status = Just (Error "Restore mutation affected multiple records, which is unexpected") }
                             , Cmd.none
                             )
 
@@ -857,13 +864,13 @@ update msg model =
                                                 n
                                         )
                                         model.notes
-                                , status = "Note updated successfully"
+                                , status = Just (Success "Note updated successfully")
                               }
                             , Cmd.none
                             )
 
                         [] ->
-                            ( { model | status = "Update mutation returned empty records list" }
+                            ( { model | status = Just (Error "Update mutation returned empty records list") }
                             , Cmd.none
                             )
 
@@ -883,7 +890,7 @@ update msg model =
                 Ok response ->
                     ( { model
                         | searchResults = getSearchNotesToSupabaseNotes response
-                        , status = "Search completed"
+                        , status = Just (Success "Search completed")
                       }
                     , Cmd.none
                     )
@@ -897,7 +904,7 @@ update msg model =
                     ( { model
                         | trashedNotes = getNotesToSupabaseNotes response
                         , notes = []
-                        , status = "Trash loaded"
+                        , status = Just (Success "Trash loaded")
                         , state = SignedIn ViewingTrash
                       }
                     , Cmd.none
@@ -918,7 +925,7 @@ update msg model =
                     applyEvent event model
 
                 Err _ ->
-                    ( { model | status = "Unexpected event payload from JS bridge." }, Cmd.none )
+                    ( { model | status = Just (Error "Unexpected event payload from JS bridge.") }, Cmd.none )
 
 
 applyEvent : Supabase.Event -> Model -> ( Model, Cmd Msg )
@@ -929,7 +936,7 @@ applyEvent event model =
                 | accessToken = Just payload.accessToken
                 , userId = Just payload.userId
                 , state = SignedIn ViewReady
-                , status = "Session ready."
+                , status = Just (Success "Session ready.")
                 , email = payload.email
               }
             , Cmd.none
@@ -941,7 +948,7 @@ applyEvent event model =
                 , userId = Nothing
                 , state = Start
                 , notes = []
-                , status = "You are signed out"
+                , status = Just (Success "You are signed out")
               }
             , Cmd.none
             )
@@ -949,7 +956,7 @@ applyEvent event model =
         Supabase.NotesLoaded payload ->
             ( { model
                 | notes = payload.notes
-                , status = "Notes loaded"
+                , status = Just (Success "Notes loaded")
               }
             , Cmd.none
             )
@@ -957,7 +964,7 @@ applyEvent event model =
         Supabase.NotesFound payload ->
             ( { model
                 | searchResults = payload.notes
-                , status = "Notes found"
+                , status = Just (Success "Notes found")
               }
             , Cmd.none
             )
@@ -967,13 +974,13 @@ applyEvent event model =
                 | notes = payload.note :: model.notes
                 , title = ""
                 , body = ""
-                , status = "Note saved"
+                , status = Just (Success "Note saved")
               }
             , Cmd.none
             )
 
         Supabase.ErrorRaised payload ->
-            ( { model | status = payload.message }
+            ( { model | status = Just (Error payload.message) }
             , Cmd.none
             )
 
@@ -1019,12 +1026,12 @@ isGraphqlAuthError error =
 handleGraphqlFailure : String -> GraphQL.Engine.Error -> Model -> ( Model, Cmd Msg )
 handleGraphqlFailure prefix error model =
     if isGraphqlAuthError error then
-        ( { model | status = prefix ++ ": session expired, refreshing..." }
+        ( { model | status = Just (Error (prefix ++ ": session expired, refreshing...")) }
         , refreshSessionCmd model
         )
 
     else
-        ( { model | status = prefix ++ ": " ++ formatGraphqlError error }
+        ( { model | status = Just (Error (prefix ++ ": " ++ formatGraphqlError error)) }
         , Cmd.none
         )
 
@@ -1069,7 +1076,7 @@ view model =
 
             _ ->
                 div [] []
-         , p [ style "padding" "0.5rem" ] [ text model.status ]
+         , p [ style "padding" "0.5rem" ] [ statusView model.status ]
          ]
             ++ (case model.state of
                     Start ->
@@ -1121,6 +1128,56 @@ headerRow =
         ]
         [ h1 [ style "margin" "0" ] [ text "Elm + Supabase + GraphQL" ]
         ]
+
+
+statusView : Maybe Status -> Html Msg
+statusView maybeStatus =
+    let
+        ( styles, message ) =
+            case maybeStatus of
+                Just (Info m) ->
+                    ( [ style "background-color" "#e8eaf1"
+                      , style "color" "#030c26"
+                      ]
+                    , m
+                    )
+
+                Just (Success m) ->
+                    ( [ style "background-color" "#047857"
+                      , style "color" "#ffffff"
+                      ]
+                    , m
+                    )
+
+                Just (Warning m) ->
+                    ( [ style "background-color" "#ec8b41"
+                      , style "color" "#030c26"
+                      ]
+                    , m
+                    )
+
+                Just (Error m) ->
+                    ( [ style "background-color" "#b91c1c"
+                      , style "color" "#ffffff"
+                      ]
+                    , m
+                    )
+
+                Nothing ->
+                    ( [], "" )
+    in
+    case ( styles, message ) of
+        ( [], "" ) ->
+            div [] []
+
+        _ ->
+            div
+                (styles
+                    ++ [ style "padding" "0.5rem"
+                       , style "border-radius" "0.75rem"
+                       ]
+                )
+                [ text message ]
 
 
 selectView : List (Html Msg)
