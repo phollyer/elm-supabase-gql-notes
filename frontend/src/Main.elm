@@ -402,7 +402,7 @@ update msg model =
 
         GotoStart ->
             ( { model
-                | status = Just (Info "Please sign in or sign up")
+                | status = Just (Info "Please sign up or sign in")
                 , state = Start
               }
             , Cmd.none
