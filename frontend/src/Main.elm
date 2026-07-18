@@ -1316,7 +1316,7 @@ editNoteView title body =
 
 searchNotesView : String -> List Supabase.Note -> List (Html Msg)
 searchNotesView searchQuery searchResults =
-    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Search Notes" ] ]
+    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Search Notes" ]
     , searchNotesInput searchQuery SearchQueryUpdated
     , searchButton AttemptSearchNotes
     , clearResultsButton ClearResults
