@@ -259,15 +259,6 @@ getSearchNotesToSupabaseNotes =
     flattenSearchNotes >> List.map toSupabaseSearchNote
 
 
-applyGraphqlNotes : GetActiveNotes.Response -> Model -> Model
-applyGraphqlNotes response model =
-    { model
-        | notes = getNotesToSupabaseNotes response
-        , status = Just (Success "Notes loaded")
-        , state = SignedIn ViewingNotes
-    }
-
-
 createNoteCmd : Config -> String -> String -> String -> String -> Cmd Msg
 createNoteCmd config accessToken userId title body =
     Cmd.map GraphqlNoteCreated <|
@@ -924,7 +915,13 @@ update msg model =
         GraphqlNotesLoaded result ->
             case result of
                 Ok response ->
-                    ( applyGraphqlNotes response model, Cmd.none )
+                    ( { model
+                        | notes = getNotesToSupabaseNotes response
+                        , status = Nothing
+                        , state = SignedIn ViewingNotes
+                      }
+                    , Cmd.none
+                    )
 
                 Err error ->
                     handleGraphqlFailure "GraphQL notes load failed" error model
