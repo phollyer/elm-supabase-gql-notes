@@ -1086,7 +1086,12 @@ view model =
          ]
             ++ (case model.state of
                     Start ->
-                        [ selectView ]
+                        [ buttons
+                            [ gotoButton "Sign up" GotoSignUp
+                            , gotoButton "Sign in" GotoSignIn
+                            , gotoButton "Magic link" GotoMagicLink
+                            ]
+                        ]
 
                     SignUp ->
                         signUpView
@@ -1187,15 +1192,6 @@ statusView maybeStatus =
                        ]
                 )
                 [ text message ]
-
-
-selectView : Html Msg
-selectView =
-    buttons
-        [ gotoButton "Sign up" GotoSignUp
-        , gotoButton "Sign in" GotoSignIn
-        , gotoButton "Magic link" GotoMagicLink
-        ]
 
 
 signUpView : ( String, Maybe String ) -> ( String, Maybe String ) -> ( String, Maybe String ) -> List (Html Msg)
