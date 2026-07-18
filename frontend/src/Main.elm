@@ -945,7 +945,7 @@ update msg model =
                     ( { model
                         | trashedNotes = getNotesToSupabaseNotes response
                         , notes = []
-                        , status = Just (Success "Trash loaded")
+                        , status = Nothing
                         , state = SignedIn ViewingTrash
                       }
                     , Cmd.none
