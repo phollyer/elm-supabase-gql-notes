@@ -8,7 +8,7 @@ import DeleteNoteSoft.DeleteNoteSoft as DeleteNoteSoft
 import GetActiveNotes.GetActiveNotes as GetActiveNotes
 import GetTrashedNotes.GetTrashedNotes as GetTrashedNotes
 import GraphQL.Engine
-import Html exposing (Html, div, h1, h2, p, text)
+import Html exposing (Html, div, h1, p, text)
 import Html.Attributes exposing (style, value)
 import Http
 import Json.Decode as Decode
@@ -276,8 +276,8 @@ createNoteCmd config accessToken userId title body =
             }
 
 
-restoreNoteCmd : Config -> String -> String -> Supabase.Note -> Cmd Msg
-restoreNoteCmd config accessToken userId note =
+restoreNoteCmd : Config -> String -> Supabase.Note -> Cmd Msg
+restoreNoteCmd config accessToken note =
     Cmd.map GraphqlNoteRestored <|
         Api.mutation
             (RestoreNote.mutation
@@ -690,21 +690,16 @@ update msg model =
                     ( { model | status = Just (Error "No note selected for deletion") }, Cmd.none )
 
         AttemptRestoreNote note ->
-            case ( model.accessToken, model.userId ) of
-                ( Just accessToken, Just userId ) ->
+            case model.accessToken of
+                Just accessToken ->
                     ( { model
                         | status = Just (Info "Restoring note...")
                         , currentNote = Just note
                       }
-                    , restoreNoteCmd model.config accessToken userId note
+                    , restoreNoteCmd model.config accessToken note
                     )
 
-                ( Nothing, _ ) ->
-                    ( { model | status = Just (Error "Session info missing. Re-checking session...") }
-                    , refreshSessionCmd model
-                    )
-
-                ( _, Nothing ) ->
+                Nothing ->
                     ( { model | status = Just (Error "Session info missing. Re-checking session...") }
                     , refreshSessionCmd model
                     )
