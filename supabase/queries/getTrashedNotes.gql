@@ -1,0 +1,18 @@
+query GetTrashedNotes {
+  notesCollection(
+    filter: { deletedAt: { is: NOT_NULL }}
+    orderBy: [{ createdAt: DescNullsLast }]) {
+    edges {
+      node {
+        id
+        title
+        body
+        createdAt
+        updatedAt
+        deletedAt
+      }
+    }
+  }
+}
+
+

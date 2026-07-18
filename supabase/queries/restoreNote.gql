@@ -1,0 +1,9 @@
+mutation RestoreNote($id: UUID!, $deletedAt: Datetime) {
+    updateNotesCollection(
+        set: { deletedAt: $deletedAt }
+        filter: { id: { eq: $id } }
+        atMost: 1
+    ) {
+        affectedCount
+    }
+}

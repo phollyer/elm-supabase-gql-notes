@@ -15,6 +15,7 @@ query SearchNotes($query: String!) {
         body
         createdAt
         updatedAt
+        deletedAt
       }
     }
   }

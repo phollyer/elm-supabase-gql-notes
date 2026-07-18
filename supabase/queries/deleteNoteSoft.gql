@@ -1,5 +1,6 @@
-mutation DeleteNote($id: UUID!) {
-    deleteFromNotesCollection(
+mutation DeleteNoteSoft($id: UUID!, $deletedAt: Datetime!) {
+    updateNotesCollection(
+        set: { deletedAt: $deletedAt }
         filter: { id: { eq: $id } }
         atMost: 1
     ) {
@@ -9,6 +10,7 @@ mutation DeleteNote($id: UUID!) {
             body
             createdAt
             updatedAt
+            deletedAt
         }
     }
 }

@@ -4,6 +4,7 @@ module Api.Input.NotesFilter exposing
     , body
     , createdAt
     , decoder
+    , deletedAt
     , id
     , input
     , nodeId
@@ -26,7 +27,7 @@ module Api.Input.NotesFilter exposing
 
 ## Optional fields
 
-@docs id, userId, title, body, createdAt, updatedAt, nodeId, and, or, not
+@docs id, userId, title, body, createdAt, updatedAt, deletedAt, nodeId, and, or, not
 -}
 
 
@@ -100,6 +101,15 @@ updatedAt newArg_ inputObj_ =
         inputObj_
 
 
+deletedAt : Api.Input.DatetimeFilter -> NotesFilter -> NotesFilter
+deletedAt newArg_ inputObj_ =
+    GraphQL.InputObject.addField
+        "deletedAt"
+        "DatetimeFilter"
+        (GraphQL.InputObject.encode newArg_)
+        inputObj_
+
+
 nodeId : Api.Input.IDFilter -> NotesFilter -> NotesFilter
 nodeId newArg_ inputObj_ =
     GraphQL.InputObject.addField
@@ -143,6 +153,7 @@ null :
     , body : NotesFilter -> NotesFilter
     , createdAt : NotesFilter -> NotesFilter
     , updatedAt : NotesFilter -> NotesFilter
+    , deletedAt : NotesFilter -> NotesFilter
     , nodeId : NotesFilter -> NotesFilter
     , and : NotesFilter -> NotesFilter
     , or : NotesFilter -> NotesFilter
@@ -188,6 +199,13 @@ null =
         \inputObj ->
             GraphQL.InputObject.addField
                 "updatedAt"
+                "DatetimeFilter"
+                Json.Encode.null
+                inputObj
+    , deletedAt =
+        \inputObj ->
+            GraphQL.InputObject.addField
+                "deletedAt"
                 "DatetimeFilter"
                 Json.Encode.null
                 inputObj
@@ -246,6 +264,7 @@ decoder =
                       , { name = "body", type_ = "StringFilter" }
                       , { name = "createdAt", type_ = "DatetimeFilter" }
                       , { name = "updatedAt", type_ = "DatetimeFilter" }
+                      , { name = "deletedAt", type_ = "DatetimeFilter" }
                       , { name = "nodeId", type_ = "IDFilter" }
                       , { name = "and", type_ = "[NotesFilter!]" }
                       , { name = "or", type_ = "[NotesFilter!]" }

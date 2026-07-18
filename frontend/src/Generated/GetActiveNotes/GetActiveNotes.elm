@@ -1,7 +1,7 @@
-module Notes.GetNotes exposing (Edges, Node, NotesCollection, Response, query)
+module GetActiveNotes.GetActiveNotes exposing (Edges, Node, NotesCollection, Response, query)
 
 {-|
-This file is generated from ../supabase/queries/notes.gql using `elm-gql`
+This file is generated from ../supabase/queries/getActiveNotes.gql using `elm-gql`
 
 Please avoid modifying directly.
 
@@ -25,7 +25,7 @@ import Json.Decode
 query : Api.Query Response
 query =
     GraphQL.Engine.operation
-        (Just "GetNotes")
+        (Just "GetActiveNotes")
         (\version_ ->
              { args = []
              , body = toPayload_ version_
@@ -56,6 +56,7 @@ type alias Node =
     , body : String
     , createdAt : Api.Datetime
     , updatedAt : Api.Datetime
+    , deletedAt : Maybe Api.Datetime
     }
 
 
@@ -82,7 +83,11 @@ decoder_ version_ =
                                                                                                                                                                                                                                                                                                                 "createdAt"
                                                                                                                                                                                                                                                                                                                 Api.datetime.decoder |> GraphQL.Decode.field
                                                                                                                                                                                                                                                                                                                                                             "updatedAt"
-                                                                                                                                                                                                                                                                                                                                                            Api.datetime.decoder
+                                                                                                                                                                                                                                                                                                                                                            Api.datetime.decoder |> GraphQL.Decode.field
+                                                                                                                                                                                                                                                                                                                                                                                                        "deletedAt"
+                                                                                                                                                                                                                                                                                                                                                                                                        (Json.Decode.nullable
+                                                                                                                                                                                                                                                                                                                                                                                                                             Api.datetime.decoder
+                                                                                                                                                                                                                                                                                                                                                                                                        )
                                                                                                                                        )
                                                                                                  )
                                                                                     )
@@ -93,11 +98,12 @@ toPayload_ : Int -> String
 toPayload_ version_ =
     GraphQL.Engine.versionedAlias
         version_
-        "notesCollection" ++ """ (orderBy: [{createdAt: DescNullsLast}]) {edges {node {id
+        "notesCollection" ++ """ (filter: {deletedAt: {is: NULL}}, orderBy: [{createdAt: DescNullsLast}]) {edges {node {id
 title
 body
 createdAt
-updatedAt } } }"""
+updatedAt
+deletedAt } } }"""
 
 
 toFragments_ : Int -> String

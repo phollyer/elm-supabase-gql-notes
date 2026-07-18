@@ -3,6 +3,7 @@ module Api.Input.NotesUpdateInput exposing
     , body
     , createdAt
     , decoder
+    , deletedAt
     , id
     , input
     , null
@@ -22,7 +23,7 @@ module Api.Input.NotesUpdateInput exposing
 
 ## Optional fields
 
-@docs id, userId, title, body, createdAt, updatedAt
+@docs id, userId, title, body, createdAt, updatedAt, deletedAt
 -}
 
 
@@ -93,6 +94,15 @@ updatedAt newArg_ inputObj_ =
         inputObj_
 
 
+deletedAt : Api.Datetime -> NotesUpdateInput -> NotesUpdateInput
+deletedAt newArg_ inputObj_ =
+    GraphQL.InputObject.addField
+        "deletedAt"
+        "Datetime"
+        (Api.datetime.encode newArg_)
+        inputObj_
+
+
 null :
     { id : NotesUpdateInput -> NotesUpdateInput
     , userId : NotesUpdateInput -> NotesUpdateInput
@@ -100,6 +110,7 @@ null :
     , body : NotesUpdateInput -> NotesUpdateInput
     , createdAt : NotesUpdateInput -> NotesUpdateInput
     , updatedAt : NotesUpdateInput -> NotesUpdateInput
+    , deletedAt : NotesUpdateInput -> NotesUpdateInput
     }
 null =
     { id =
@@ -140,6 +151,13 @@ null =
                 "Datetime"
                 Json.Encode.null
                 inputObj
+    , deletedAt =
+        \inputObj ->
+            GraphQL.InputObject.addField
+                "deletedAt"
+                "Datetime"
+                Json.Encode.null
+                inputObj
     }
 
 
@@ -167,6 +185,7 @@ decoder =
                       , { name = "body", type_ = "String" }
                       , { name = "createdAt", type_ = "Datetime" }
                       , { name = "updatedAt", type_ = "Datetime" }
+                      , { name = "deletedAt", type_ = "Datetime" }
                       ]
                  )
         )

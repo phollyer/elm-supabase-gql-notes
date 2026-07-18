@@ -3,6 +3,7 @@ module Api.Input.NotesOrderBy exposing
     , body
     , createdAt
     , decoder
+    , deletedAt
     , id
     , input
     , null
@@ -22,7 +23,7 @@ module Api.Input.NotesOrderBy exposing
 
 ## Optional fields
 
-@docs id, userId, title, body, createdAt, updatedAt
+@docs id, userId, title, body, createdAt, updatedAt, deletedAt
 -}
 
 
@@ -102,6 +103,16 @@ updatedAt newArg_ inputObj_ =
         inputObj_
 
 
+deletedAt :
+    Api.Enum.OrderByDirection.OrderByDirection -> NotesOrderBy -> NotesOrderBy
+deletedAt newArg_ inputObj_ =
+    GraphQL.InputObject.addField
+        "deletedAt"
+        "OrderByDirection"
+        (Api.Enum.OrderByDirection.encode newArg_)
+        inputObj_
+
+
 null :
     { id : NotesOrderBy -> NotesOrderBy
     , userId : NotesOrderBy -> NotesOrderBy
@@ -109,6 +120,7 @@ null :
     , body : NotesOrderBy -> NotesOrderBy
     , createdAt : NotesOrderBy -> NotesOrderBy
     , updatedAt : NotesOrderBy -> NotesOrderBy
+    , deletedAt : NotesOrderBy -> NotesOrderBy
     }
 null =
     { id =
@@ -153,6 +165,13 @@ null =
                 "OrderByDirection"
                 Json.Encode.null
                 inputObj
+    , deletedAt =
+        \inputObj ->
+            GraphQL.InputObject.addField
+                "deletedAt"
+                "OrderByDirection"
+                Json.Encode.null
+                inputObj
     }
 
 
@@ -180,6 +199,7 @@ decoder =
                       , { name = "body", type_ = "OrderByDirection" }
                       , { name = "createdAt", type_ = "OrderByDirection" }
                       , { name = "updatedAt", type_ = "OrderByDirection" }
+                      , { name = "deletedAt", type_ = "OrderByDirection" }
                       ]
                  )
         )

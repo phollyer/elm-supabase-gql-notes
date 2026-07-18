@@ -1,0 +1,18 @@
+query GetActiveNotes {
+  notesCollection(
+    filter: { deletedAt: { is: NULL }}
+    orderBy: [{ createdAt: DescNullsLast }]) {
+    edges {
+      node {
+        id
+        title
+        body
+        createdAt
+        updatedAt
+        deletedAt
+      }
+    }
+  }
+}
+
+

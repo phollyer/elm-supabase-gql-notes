@@ -3,14 +3,17 @@ module Main exposing (main)
 import Api exposing (Datetime(..), Uuid(..))
 import Browser
 import CreateNote.CreateNote as CreateNote
-import DeleteNote.DeleteNote as DeleteNote
+import DeleteNoteHard.DeleteNoteHard as DeleteNoteHard
+import DeleteNoteSoft.DeleteNoteSoft as DeleteNoteSoft
+import GetActiveNotes.GetActiveNotes as GetActiveNotes
+import GetTrashedNotes.GetTrashedNotes as GetTrashedNotes
 import GraphQL.Engine
 import Html exposing (Html, div, h1, h2, p, text)
 import Html.Attributes exposing (style, value)
 import Http
 import Json.Decode as Decode
-import Notes.GetNotes as GetNotes
 import Ports.Supabase as Supabase
+import RestoreNote.RestoreNote as RestoreNote
 import SearchNotes.SearchNotes as SearchNotes
 import String
 import UI.FormElements exposing (attemptButton, clearResultsButton, emailInput, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, passwordConfirmInput, passwordInput, searchButton, searchNotesInput)
@@ -43,6 +46,7 @@ type alias Model =
     , state : State
     , currentNote : Maybe Supabase.Note
     , notes : List Supabase.Note
+    , trashedNotes : List Supabase.Note
     , searchQuery : String
     , searchResults : List Supabase.Note
     , nextId : Int
@@ -78,6 +82,7 @@ init flags =
       , state = Start
       , currentNote = Nothing
       , notes = []
+      , trashedNotes = []
       , searchQuery = ""
       , searchResults = []
       , nextId = 1
@@ -91,10 +96,17 @@ type State
     | SignUp
     | SignIn
     | MagicLink
-    | SignedIn
-    | Search
-    | Edit
-    | Delete DeleteState
+    | SignedIn ViewState
+
+
+type ViewState
+    = ViewReady
+    | ViewingNotes
+    | ViewingTrash
+    | EditingNote
+    | SearchingNotes
+    | TrashingNote DeleteState
+    | DeleteNote DeleteState
 
 
 type DeleteState
@@ -113,10 +125,12 @@ type Msg
     | AttemptMagicLinkSignIn
     | AttemptSignOut
     | AttemptCreateNote
-    | AttemptDeleteNote
-    | AttemptReinstateNote
+    | AttemptDeleteNoteHard
+    | AttemptDeleteNoteSoft
+    | AttemptRestoreNote Supabase.Note
     | AttemptUpdateNote
     | AttemptFetchNotes
+    | AttemptFetchTrash
     | AttemptSearchNotes
     | SearchQueryUpdated String
     | ClearResults
@@ -128,15 +142,18 @@ type Msg
     | GotoSearch
     | GotoEditNote Supabase.Note
     | GotoDeleteNote Supabase.Note
+    | GotoTrashNote Supabase.Note
     | TitleUpdated String
     | BodyUpdated String
     | SupabaseEventReceived Decode.Value
-    | GraphqlNotesLoaded (Result GraphQL.Engine.Error GetNotes.Response)
+    | GraphqlNotesLoaded (Result GraphQL.Engine.Error GetActiveNotes.Response)
     | GraphqlNoteCreated (Result GraphQL.Engine.Error CreateNote.Response)
-    | GraphqlNoteDeleted (Result GraphQL.Engine.Error DeleteNote.Response)
-    | GraphqlNoteReinstated (Result GraphQL.Engine.Error CreateNote.Response)
+    | GraphqlNoteDeletedHard (Result GraphQL.Engine.Error DeleteNoteHard.Response)
+    | GraphqlNoteDeletedSoft (Result GraphQL.Engine.Error DeleteNoteSoft.Response)
+    | GraphqlNoteRestored (Result GraphQL.Engine.Error RestoreNote.Response)
     | GraphqlNoteUpdated (Result GraphQL.Engine.Error UpdateNote.Response)
     | GraphqlSearchNotesLoaded (Result GraphQL.Engine.Error SearchNotes.Response)
+    | GraphqlTrashLoaded (Result GraphQL.Engine.Error GetTrashedNotes.Response)
 
 
 graphqlHeaders : String -> String -> List Http.Header
@@ -163,6 +180,7 @@ toSupabaseCreatedNote { id, title, body, createdAt } =
     , body = body
     , createdAt = datetimeToString createdAt
     , updatedAt = datetimeToString createdAt
+    , deletedAt = Nothing
     }
 
 
@@ -173,10 +191,22 @@ toSupabaseUpdateNote { id, title, body, createdAt, updatedAt } =
     , body = body
     , createdAt = datetimeToString createdAt
     , updatedAt = datetimeToString updatedAt
+    , deletedAt = Nothing
     }
 
 
-flattenGetNotes : GetNotes.Response -> List GetNotes.Node
+toSupabaseDeleteNoteSoft : DeleteNoteSoft.Records -> Supabase.Note
+toSupabaseDeleteNoteSoft { id, title, body, createdAt, updatedAt, deletedAt } =
+    { id = uuidToString id
+    , title = title
+    , body = body
+    , createdAt = datetimeToString createdAt
+    , updatedAt = datetimeToString updatedAt
+    , deletedAt = Maybe.map datetimeToString deletedAt
+    }
+
+
+flattenGetNotes : GetActiveNotes.Response -> List GetActiveNotes.Node
 flattenGetNotes response =
     List.map .node response.notesCollection.edges
 
@@ -186,27 +216,29 @@ flattenSearchNotes response =
     List.map .node response.notesCollection.edges
 
 
-toSupabaseNote : GetNotes.Node -> Supabase.Note
-toSupabaseNote { id, title, body, createdAt, updatedAt } =
+toSupabaseNote : GetActiveNotes.Node -> Supabase.Note
+toSupabaseNote { id, title, body, createdAt, updatedAt, deletedAt } =
     { id = uuidToString id
     , title = title
     , body = body
     , createdAt = datetimeToString createdAt
     , updatedAt = datetimeToString updatedAt
+    , deletedAt = Maybe.map datetimeToString deletedAt
     }
 
 
 toSupabaseSearchNote : SearchNotes.Node -> Supabase.Note
-toSupabaseSearchNote { id, title, body, createdAt, updatedAt } =
+toSupabaseSearchNote { id, title, body, createdAt, updatedAt, deletedAt } =
     { id = uuidToString id
     , title = title
     , body = body
     , createdAt = datetimeToString createdAt
     , updatedAt = datetimeToString updatedAt
+    , deletedAt = Maybe.map datetimeToString deletedAt
     }
 
 
-getNotesToSupabaseNotes : GetNotes.Response -> List Supabase.Note
+getNotesToSupabaseNotes : GetActiveNotes.Response -> List Supabase.Note
 getNotesToSupabaseNotes =
     flattenGetNotes >> List.map toSupabaseNote
 
@@ -216,11 +248,12 @@ getSearchNotesToSupabaseNotes =
     flattenSearchNotes >> List.map toSupabaseSearchNote
 
 
-applyGraphqlNotes : GetNotes.Response -> Model -> Model
+applyGraphqlNotes : GetActiveNotes.Response -> Model -> Model
 applyGraphqlNotes response model =
     { model
         | notes = getNotesToSupabaseNotes response
         , status = "Notes loaded."
+        , state = SignedIn ViewingNotes
     }
 
 
@@ -241,14 +274,13 @@ createNoteCmd config accessToken userId title body =
             }
 
 
-reinstateNoteCmd : Config -> String -> String -> String -> String -> Cmd Msg
-reinstateNoteCmd config accessToken userId title body =
-    Cmd.map GraphqlNoteReinstated <|
+restoreNoteCmd : Config -> String -> String -> Supabase.Note -> Cmd Msg
+restoreNoteCmd config accessToken userId note =
+    Cmd.map GraphqlNoteRestored <|
         Api.mutation
-            (CreateNote.mutation
-                { userId = Uuid userId
-                , title = title
-                , body = body
+            (RestoreNote.mutation
+                { id = Uuid note.id
+                , deletedAt = Api.null
                 }
             )
             { headers = graphqlHeaders config.publishableKey accessToken
@@ -258,12 +290,28 @@ reinstateNoteCmd config accessToken userId title body =
             }
 
 
-deleteNoteCmd : Config -> String -> Supabase.Note -> Cmd Msg
-deleteNoteCmd config accessToken note =
-    Cmd.map GraphqlNoteDeleted <|
+hardDeleteNoteCmd : Config -> String -> Supabase.Note -> Cmd Msg
+hardDeleteNoteCmd config accessToken note =
+    Cmd.map GraphqlNoteDeletedHard <|
         Api.mutation
-            (DeleteNote.mutation
+            (DeleteNoteHard.mutation
                 { id = Uuid note.id }
+            )
+            { headers = graphqlHeaders config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
+
+
+softDeleteNoteCmd : Config -> String -> Supabase.Note -> Cmd Msg
+softDeleteNoteCmd config accessToken note =
+    Cmd.map GraphqlNoteDeletedSoft <|
+        Api.mutation
+            (DeleteNoteSoft.mutation
+                { id = Uuid note.id
+                , deletedAt = Datetime "1970-01-01T00:00:00Z"
+                }
             )
             { headers = graphqlHeaders config.publishableKey accessToken
             , url = config.graphqlUrl
@@ -292,7 +340,18 @@ updateNoteCmd config accessToken note =
 fetchNotesCmd : Config -> String -> Cmd Msg
 fetchNotesCmd config accessToken =
     Cmd.map GraphqlNotesLoaded <|
-        Api.query GetNotes.query
+        Api.query GetActiveNotes.query
+            { headers = graphqlHeaders config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
+
+
+fetchTrashCmd : Config -> String -> Cmd Msg
+fetchTrashCmd config accessToken =
+    Cmd.map GraphqlTrashLoaded <|
+        Api.query GetTrashedNotes.query
             { headers = graphqlHeaders config.publishableKey accessToken
             , url = config.graphqlUrl
             , timeout = Nothing
@@ -334,7 +393,7 @@ update msg model =
 
         GotoStart ->
             ( { model
-                | status = "Please sign in or sign up."
+                | status = "Please sign in or sign up"
                 , state = Start
               }
             , Cmd.none
@@ -350,7 +409,7 @@ update msg model =
 
         GotoSignIn ->
             ( { model
-                | status = "Please sign in."
+                | status = "Please sign in"
                 , state = SignIn
               }
             , Cmd.none
@@ -358,7 +417,7 @@ update msg model =
 
         GotoMagicLink ->
             ( { model
-                | status = "Please sign in with magic link."
+                | status = "Please sign in with magic link"
                 , state = MagicLink
               }
             , Cmd.none
@@ -370,7 +429,7 @@ update msg model =
                 , body = note.body
                 , currentNote = Just note
                 , status = "Editing note..."
-                , state = Edit
+                , state = SignedIn EditingNote
               }
             , Cmd.none
             )
@@ -379,7 +438,16 @@ update msg model =
             ( { model
                 | currentNote = Just note
                 , status = "Confirm Delete"
-                , state = Delete DeleteReady
+                , state = SignedIn (DeleteNote DeleteReady)
+              }
+            , Cmd.none
+            )
+
+        GotoTrashNote note ->
+            ( { model
+                | currentNote = Just note
+                , status = "Send note to the trash"
+                , state = SignedIn (TrashingNote DeleteReady)
               }
             , Cmd.none
             )
@@ -387,7 +455,7 @@ update msg model =
         GotoNotes ->
             ( { model
                 | status = "Viewing notes..."
-                , state = SignedIn
+                , state = SignedIn ViewingNotes
               }
             , Cmd.none
             )
@@ -395,7 +463,7 @@ update msg model =
         GotoSearch ->
             ( { model
                 | status = "Search notes..."
-                , state = Search
+                , state = SignedIn SearchingNotes
               }
             , Cmd.none
             )
@@ -419,21 +487,21 @@ update msg model =
             let
                 emailError =
                     if String.isEmpty model.email then
-                        Just "Email is required."
+                        Just "Email is required"
 
                     else
                         Nothing
 
                 passwordError =
                     if String.isEmpty model.password then
-                        Just "Password is required."
+                        Just "Password is required"
 
                     else
                         Nothing
 
                 passwordConfirmError =
                     if model.password /= model.passwordConfirm then
-                        Just "Passwords do not match."
+                        Just "Passwords do not match"
 
                     else
                         Nothing
@@ -458,11 +526,11 @@ update msg model =
                     )
 
                 _ ->
-                    ( { newModel | status = "Please fix the errors below." }, Cmd.none )
+                    ( { newModel | status = "Please fix the errors below" }, Cmd.none )
 
         AttemptPasswordSignIn ->
             if String.isEmpty model.email || String.isEmpty model.password then
-                ( { model | status = "Email and password are required." }, Cmd.none )
+                ( { model | status = "Email and password are required" }, Cmd.none )
 
             else
                 ( { model | status = "Signing in with password..." }
@@ -477,7 +545,7 @@ update msg model =
 
         AttemptMagicLinkSignIn ->
             if String.isEmpty model.email then
-                ( { model | status = "Email is required for magic link." }, Cmd.none )
+                ( { model | status = "Email is required for magic link" }, Cmd.none )
 
             else
                 ( { model | status = "Sending magic link..." }
@@ -506,9 +574,21 @@ update msg model =
                     , refreshSessionCmd model
                     )
 
+        AttemptFetchTrash ->
+            case model.accessToken of
+                Just accessToken ->
+                    ( { model | status = "Loading trash..." }
+                    , fetchTrashCmd model.config accessToken
+                    )
+
+                Nothing ->
+                    ( { model | status = "No access token. Re-checking session..." }
+                    , refreshSessionCmd model
+                    )
+
         AttemptCreateNote ->
             if String.isEmpty model.title then
-                ( { model | status = "Title is required." }, Cmd.none )
+                ( { model | status = "Title is required" }, Cmd.none )
 
             else
                 case ( model.accessToken, model.userId ) of
@@ -522,11 +602,11 @@ update msg model =
                         , refreshSessionCmd model
                         )
 
-        AttemptDeleteNote ->
+        AttemptDeleteNoteHard ->
             case ( model.accessToken, model.currentNote ) of
                 ( Just accessToken, Just note ) ->
                     ( { model | status = "Deleting note..." }
-                    , deleteNoteCmd model.config accessToken note
+                    , hardDeleteNoteCmd model.config accessToken note
                     )
 
                 ( Nothing, _ ) ->
@@ -535,27 +615,42 @@ update msg model =
                     )
 
                 ( _, Nothing ) ->
-                    ( { model | status = "No note selected for deletion." }, Cmd.none )
+                    ( { model | status = "No note selected for deletion" }, Cmd.none )
 
-        AttemptReinstateNote ->
-            case ( model.accessToken, model.userId, model.currentNote ) of
-                ( Just accessToken, Just userId, Just currentNote ) ->
-                    ( { model | status = "Reinstating note..." }
-                    , reinstateNoteCmd model.config accessToken userId currentNote.title currentNote.body
+        AttemptDeleteNoteSoft ->
+            case ( model.accessToken, model.currentNote ) of
+                ( Just accessToken, Just note ) ->
+                    ( { model | status = "Soft deleting note..." }
+                    , softDeleteNoteCmd model.config accessToken note
                     )
 
-                ( Nothing, _, _ ) ->
+                ( Nothing, _ ) ->
                     ( { model | status = "Session info missing. Re-checking session..." }
                     , refreshSessionCmd model
                     )
 
-                ( _, Nothing, _ ) ->
+                ( _, Nothing ) ->
+                    ( { model | status = "No note selected for deletion" }, Cmd.none )
+
+        AttemptRestoreNote note ->
+            case ( model.accessToken, model.userId ) of
+                ( Just accessToken, Just userId ) ->
+                    ( { model
+                        | status = "Restoring note..."
+                        , currentNote = Just note
+                      }
+                    , restoreNoteCmd model.config accessToken userId note
+                    )
+
+                ( Nothing, _ ) ->
                     ( { model | status = "Session info missing. Re-checking session..." }
                     , refreshSessionCmd model
                     )
 
-                ( _, _, Nothing ) ->
-                    ( { model | status = "No note selected for reinstatement." }, Cmd.none )
+                ( _, Nothing ) ->
+                    ( { model | status = "Session info missing. Re-checking session..." }
+                    , refreshSessionCmd model
+                    )
 
         AttemptUpdateNote ->
             if String.isEmpty model.title then
@@ -598,7 +693,7 @@ update msg model =
                                 record :: _ ->
                                     ( { model
                                         | notes = toSupabaseCreatedNote record :: model.notes
-                                        , status = "Note created successfully."
+                                        , status = "Note created successfully"
                                         , title = ""
                                         , body = ""
                                       }
@@ -606,22 +701,65 @@ update msg model =
                                     )
 
                                 [] ->
-                                    ( { model | status = "Create mutation returned empty records list." }
+                                    ( { model | status = "Create mutation returned empty records list" }
                                     , Cmd.none
                                     )
 
                         Nothing ->
-                            ( { model | status = "Create mutation returned no records." }
+                            ( { model | status = "Create mutation returned no records" }
                             , Cmd.none
                             )
 
                 Err error ->
                     handleGraphqlFailure "GraphQL note creation failed" error model
 
-        GraphqlNoteDeleted result ->
+        GraphqlNoteDeletedHard result ->
             case result of
                 Ok response ->
-                    case response.deleteFromNotesCollection.records of
+                    case response.deleteFromNotesCollection.affectedCount of
+                        1 ->
+                            let
+                                deletedNoteId =
+                                    case model.currentNote of
+                                        Just note ->
+                                            note.id
+
+                                        Nothing ->
+                                            ""
+                            in
+                            ( { model
+                                | notes =
+                                    List.filter (\n -> n.id /= deletedNoteId) model.notes
+                                , status = "Note deleted successfully."
+                                , currentNote = Nothing
+                                , state = SignedIn (DeleteNote DeleteSuccess)
+                              }
+                            , Cmd.none
+                            )
+
+                        0 ->
+                            ( { model
+                                | status = "Delete mutation did not affect any records"
+                                , state = SignedIn (DeleteNote DeleteFailure)
+                              }
+                            , Cmd.none
+                            )
+
+                        _ ->
+                            ( { model
+                                | status = "Delete mutation affected multiple records, which is unexpected"
+                                , state = SignedIn (DeleteNote DeleteFailure)
+                              }
+                            , Cmd.none
+                            )
+
+                Err error ->
+                    handleGraphqlFailure "GraphQL note deletion failed" error model
+
+        GraphqlNoteDeletedSoft result ->
+            case result of
+                Ok response ->
+                    case response.updateNotesCollection.records of
                         record :: _ ->
                             let
                                 deletedNoteId =
@@ -630,52 +768,61 @@ update msg model =
                             ( { model
                                 | notes =
                                     List.filter (\n -> n.id /= deletedNoteId) model.notes
-                                , status = "Note deleted successfully."
-                                , currentNote = Just (toSupabaseNote record)
-                                , state = Delete DeleteSuccess
+                                , trashedNotes = toSupabaseNote record :: model.trashedNotes
+                                , status = "Note has been trashed successfully"
+                                , currentNote = Nothing
+                                , state = SignedIn (TrashingNote DeleteSuccess)
                               }
                             , Cmd.none
                             )
 
                         [] ->
                             ( { model
-                                | status = "Delete mutation returned empty records list."
-                                , state = Delete DeleteFailure
+                                | status = "Soft delete mutation returned empty records list"
+                                , state = SignedIn (TrashingNote DeleteFailure)
                               }
                             , Cmd.none
                             )
 
                 Err error ->
-                    handleGraphqlFailure "GraphQL note deletion failed" error model
+                    handleGraphqlFailure "GraphQL note soft deletion failed" error model
 
-        GraphqlNoteReinstated result ->
+        GraphqlNoteRestored result ->
             case result of
                 Ok response ->
-                    case response.insertIntoNotesCollection of
-                        Just { records } ->
-                            case records of
-                                record :: _ ->
+                    case response.updateNotesCollection.affectedCount of
+                        1 ->
+                            case model.currentNote of
+                                Just note ->
+                                    let
+                                        restoredNote =
+                                            { note | deletedAt = Nothing }
+                                    in
                                     ( { model
-                                        | notes = toSupabaseCreatedNote record :: model.notes
-                                        , status = "Note reinstated successfully."
-                                        , title = ""
-                                        , body = ""
+                                        | notes = restoredNote :: model.notes
+                                        , trashedNotes =
+                                            List.filter (\n -> n.id /= note.id) model.trashedNotes
+                                        , status = "Note restored successfully"
+                                        , currentNote = Nothing
                                       }
                                     , Cmd.none
                                     )
 
-                                [] ->
-                                    ( { model | status = "Create mutation returned empty records list." }
-                                    , Cmd.none
-                                    )
+                                Nothing ->
+                                    ( { model | status = "No current note to restore" }, Cmd.none )
 
-                        Nothing ->
-                            ( { model | status = "Create mutation returned no records." }
+                        0 ->
+                            ( { model | status = "Restore mutation returned no records" }
+                            , Cmd.none
+                            )
+
+                        _ ->
+                            ( { model | status = "Restore mutation affected multiple records, which is unexpected" }
                             , Cmd.none
                             )
 
                 Err error ->
-                    handleGraphqlFailure "GraphQL note creation failed" error model
+                    handleGraphqlFailure "GraphQL note restoration failed" error model
 
         GraphqlNoteUpdated result ->
             case result of
@@ -697,13 +844,13 @@ update msg model =
                                                 n
                                         )
                                         model.notes
-                                , status = "Note updated successfully."
+                                , status = "Note updated successfully"
                               }
                             , Cmd.none
                             )
 
                         [] ->
-                            ( { model | status = "Update mutation returned empty records list." }
+                            ( { model | status = "Update mutation returned empty records list" }
                             , Cmd.none
                             )
 
@@ -723,13 +870,28 @@ update msg model =
                 Ok response ->
                     ( { model
                         | searchResults = getSearchNotesToSupabaseNotes response
-                        , status = "Search completed."
+                        , status = "Search completed"
                       }
                     , Cmd.none
                     )
 
                 Err error ->
                     handleGraphqlFailure "GraphQL search failed" error model
+
+        GraphqlTrashLoaded result ->
+            case result of
+                Ok response ->
+                    ( { model
+                        | trashedNotes = getNotesToSupabaseNotes response
+                        , notes = []
+                        , status = "Trash loaded"
+                        , state = SignedIn ViewingTrash
+                      }
+                    , Cmd.none
+                    )
+
+                Err error ->
+                    handleGraphqlFailure "GraphQL trash load failed" error model
 
         TitleUpdated value ->
             ( { model | title = value }, Cmd.none )
@@ -753,11 +915,11 @@ applyEvent event model =
             ( { model
                 | accessToken = Just payload.accessToken
                 , userId = Just payload.userId
-                , state = SignedIn
+                , state = SignedIn ViewReady
                 , status = "Session ready."
                 , email = payload.email
               }
-            , fetchNotesCmd model.config payload.accessToken
+            , Cmd.none
             )
 
         Supabase.SessionMissing _ ->
@@ -867,11 +1029,25 @@ view model =
         , style "margin" "2rem auto"
         , style "padding" "0 1rem"
         ]
-        ([ headerRow model.state
+        ([ headerRow
+         , case model.state of
+            SignedIn _ ->
+                div
+                    [ style "display" "flex"
+                    , style "gap" "0.5rem"
+                    ]
+                    [ attemptButton "Fetch notes" AttemptFetchNotes
+                    , gotoButton "Search notes" GotoSearch
+                    , attemptButton "Fetch Trash" AttemptFetchTrash
+                    , attemptButton "Sign out" AttemptSignOut
+                    ]
+
+            _ ->
+                div [] []
          , p [ style "color" "#444" ] [ text "Personal knowledge tracker starter." ]
          , p [ style "padding" "0.5rem" ] [ text model.status ]
          ]
-            ++ (case model.state of
+            ++ (case model.state |> Debug.log "View State" of
                     Start ->
                         selectView
 
@@ -884,42 +1060,38 @@ view model =
                     MagicLink ->
                         magicLinkView model.email
 
-                    SignedIn ->
-                        signedInView model.title model.body model.notes
+                    SignedIn ViewReady ->
+                        [ div [] [ text "Welcome! Please fetch your notes." ] ]
 
-                    Search ->
+                    SignedIn ViewingNotes ->
+                        signedInNotesView model.title model.body model.notes
+
+                    SignedIn ViewingTrash ->
+                        signedInTrashView model.trashedNotes
+
+                    SignedIn SearchingNotes ->
                         searchNotesView model.searchQuery model.searchResults
 
-                    Edit ->
+                    SignedIn EditingNote ->
                         editNoteView model.title model.body
 
-                    Delete state ->
+                    SignedIn (DeleteNote state) ->
                         deleteNoteView state model.currentNote
+
+                    SignedIn (TrashingNote state) ->
+                        trashingNoteView state model.currentNote
                )
         )
 
 
-headerRow : State -> Html Msg
-headerRow state =
+headerRow : Html Msg
+headerRow =
     div
         [ style "display" "flex"
         , style "justify-content" "space-between"
         , style "align-items" "center"
         ]
         [ h1 [ style "margin" "0" ] [ text "Elm + Supabase + GraphQL" ]
-        , case state of
-            SignedIn ->
-                div
-                    [ style "display" "flex"
-                    , style "gap" "0.5rem"
-                    ]
-                    [ attemptButton "Fetch notes" AttemptFetchNotes
-                    , gotoButton "Search notes" GotoSearch
-                    , attemptButton "Sign out" AttemptSignOut
-                    ]
-
-            _ ->
-                div [] []
         ]
 
 
@@ -958,9 +1130,22 @@ magicLinkView email =
     ]
 
 
-signedInView : String -> String -> List Supabase.Note -> List (Html Msg)
-signedInView title body notes =
-    notesView title body notes
+signedInNotesView : String -> String -> List Supabase.Note -> List (Html Msg)
+signedInNotesView title body notes =
+    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Notes" ]
+    , notesTitleInput title TitleUpdated
+    , notesContentInput body BodyUpdated
+    , attemptButton "Create note" AttemptCreateNote
+    , h2 [ style "font-size" "1.1rem", style "margin-top" "1.5rem" ] [ text "Your notes" ]
+    , div [ style "margin-top" "1rem" ] (List.map noteCard notes)
+    ]
+
+
+signedInTrashView : List Supabase.Note -> List (Html Msg)
+signedInTrashView trashedNotes =
+    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Trash" ]
+    , div [ style "margin-top" "1rem" ] (List.map trashedNoteCard trashedNotes)
+    ]
 
 
 
@@ -983,10 +1168,41 @@ deleteNoteView state maybeNote =
                 ]
             , case state of
                 DeleteReady ->
-                    attemptButton "Confirm Delete" AttemptDeleteNote
+                    attemptButton "Confirm Delete" AttemptDeleteNoteHard
 
                 DeleteSuccess ->
-                    attemptButton "Reinstate" AttemptReinstateNote
+                    div [] []
+
+                DeleteFailure ->
+                    div [] []
+            , gotoButton "Back to Notes" GotoNotes
+            ]
+
+        Nothing ->
+            []
+
+
+trashingNoteView : DeleteState -> Maybe Supabase.Note -> List (Html Msg)
+trashingNoteView state maybeNote =
+    case maybeNote of
+        Just note ->
+            [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Trash Note" ]
+            , div
+                [ style "border" "1px solid #ddd"
+                , style "padding" "0.75rem"
+                , style "border-radius" "0.5rem"
+                , style "margin-bottom" "0.5rem"
+                ]
+                [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text note.title ]
+                , p [ style "margin" "0" ] [ text note.body ]
+                ]
+            , case state of
+                DeleteReady ->
+                    attemptButton "Confirm" AttemptDeleteNoteSoft
+
+                DeleteSuccess ->
+                    attemptButton "Reinstate" <|
+                        AttemptRestoreNote note
 
                 DeleteFailure ->
                     div [] []
@@ -1019,17 +1235,6 @@ searchNotesView searchQuery searchResults =
     ]
 
 
-notesView : String -> String -> List Supabase.Note -> List (Html Msg)
-notesView title body notes =
-    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Notes" ]
-    , notesTitleInput title TitleUpdated
-    , notesContentInput body BodyUpdated
-    , attemptButton "Create note" AttemptCreateNote
-    , h2 [ style "font-size" "1.1rem", style "margin-top" "1.5rem" ] [ text "Your notes" ]
-    , div [ style "margin-top" "1rem" ] (List.map noteCard notes)
-    ]
-
-
 noteCard : Supabase.Note -> Html Msg
 noteCard note =
     div
@@ -1041,5 +1246,20 @@ noteCard note =
         [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text note.title ]
         , p [ style "margin" "0" ] [ text note.body ]
         , gotoButton "Edit" (GotoEditNote note)
+        , gotoButton "Trash Note" (GotoTrashNote note)
+        ]
+
+
+trashedNoteCard : Supabase.Note -> Html Msg
+trashedNoteCard note =
+    div
+        [ style "border" "1px solid #ddd"
+        , style "padding" "0.75rem"
+        , style "border-radius" "0.5rem"
+        , style "margin-bottom" "0.5rem"
+        ]
+        [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text note.title ]
+        , p [ style "margin" "0" ] [ text note.body ]
+        , attemptButton "Restore" (AttemptRestoreNote note)
         , gotoButton "Delete" (GotoDeleteNote note)
         ]

@@ -37,7 +37,7 @@ type NotesConnection {
 }
 
 type NotesDeleteResponse {
-    affectedCount
+    records
 }
 
 type NotesEdge {
@@ -45,10 +45,6 @@ type NotesEdge {
 }
 
 type NotesInsertResponse {
-    affectedCount
-}
-
-type NotesUpdateResponse {
     affectedCount
 }
 
