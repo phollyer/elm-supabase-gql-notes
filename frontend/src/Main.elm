@@ -410,8 +410,14 @@ update msg model =
 
         GotoSignUp ->
             ( { model
-                | status = Just (Info "Registering user...")
+                | status = Nothing
                 , state = SignUp
+                , email = ""
+                , password = ""
+                , passwordConfirm = ""
+                , emailError = Nothing
+                , passwordError = Nothing
+                , passwordConfirmError = Nothing
               }
             , Cmd.none
             )
@@ -1194,7 +1200,8 @@ selectView =
 
 signUpView : ( String, Maybe String ) -> ( String, Maybe String ) -> ( String, Maybe String ) -> List (Html Msg)
 signUpView ( email, emailError ) ( password, passwordError ) ( passwordConfirm, passwordConfirmError ) =
-    [ emailInput email EmailUpdated
+    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Sign Up" ]
+    , emailInput email EmailUpdated
     , errorView emailError
     , passwordInput password PasswordUpdated
     , errorView passwordError
