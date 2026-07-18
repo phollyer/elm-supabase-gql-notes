@@ -1108,7 +1108,13 @@ view model =
                         magicLinkView model.email
 
                     SignedIn ViewReady ->
-                        [ div [] [ text "Welcome! Please fetch your notes." ] ]
+                        [ h1 [] [ text "Welcome!" ]
+                        , div
+                            [ style "margin-top" "1rem"
+                            , style "color" "#6b7280"
+                            ]
+                            [ text "Please fetch/search your notes, or create a new one." ]
+                        ]
 
                     SignedIn ViewingNotes ->
                         signedInNotesView model.notes
