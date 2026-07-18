@@ -426,6 +426,8 @@ update msg model =
             ( { model
                 | status = Just (Info "Please sign in")
                 , state = SignIn
+                , email = ""
+                , password = ""
               }
             , Cmd.none
             )
