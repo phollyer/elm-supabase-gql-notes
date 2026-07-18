@@ -103,6 +103,7 @@ type ViewState
     = ViewReady
     | ViewingNotes
     | ViewingTrash
+    | CreatingNote
     | EditingNote
     | SearchingNotes
     | TrashingNote DeleteState
@@ -140,6 +141,7 @@ type Msg
     | GotoMagicLink
     | GotoNotes
     | GotoSearch
+    | GotoCreateNote
     | GotoEditNote Supabase.Note
     | GotoDeleteNote Supabase.Note
     | GotoTrashNote Supabase.Note
@@ -419,6 +421,17 @@ update msg model =
             ( { model
                 | status = "Please sign in with magic link"
                 , state = MagicLink
+              }
+            , Cmd.none
+            )
+
+        GotoCreateNote ->
+            ( { model
+                | title = ""
+                , body = ""
+                , currentNote = Nothing
+                , status = "Create Note"
+                , state = SignedIn CreatingNote
               }
             , Cmd.none
             )
@@ -1040,7 +1053,8 @@ view model =
                         [ style "display" "flex"
                         , style "gap" "0.5rem"
                         ]
-                        [ attemptButton "Notes" AttemptFetchNotes
+                        [ gotoButton "Create" GotoCreateNote
+                        , attemptButton "Notes" AttemptFetchNotes
                         , gotoButton "Search" GotoSearch
                         ]
                     , div
@@ -1081,6 +1095,9 @@ view model =
 
                     SignedIn SearchingNotes ->
                         searchNotesView model.searchQuery model.searchResults
+
+                    SignedIn CreatingNote ->
+                        createNoteView model.title model.body
 
                     SignedIn EditingNote ->
                         editNoteView model.title model.body
