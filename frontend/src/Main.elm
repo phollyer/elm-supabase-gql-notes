@@ -478,7 +478,7 @@ update msg model =
                 | status = Nothing
                 , state = SignedIn ViewingNotes
               }
-            , Cmd.none
+            , fetchNotesCmd model.config (Maybe.withDefault "" model.accessToken)
             )
 
         GotoSearch ->
