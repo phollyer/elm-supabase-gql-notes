@@ -826,7 +826,7 @@ update msg model =
                             ( { model
                                 | notes =
                                     List.filter (\n -> n.id /= deletedNoteId) model.notes
-                                , trashedNotes = toSupabaseNote record :: model.trashedNotes
+                                , trashedNotes = toSupabaseDeleteNoteSoft record :: model.trashedNotes
                                 , status = Just (Success "Note has been trashed successfully")
                                 , currentNote = Nothing
                                 , state = SignedIn (TrashingNote DeleteSuccess)
