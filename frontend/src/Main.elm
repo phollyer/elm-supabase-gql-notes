@@ -443,7 +443,9 @@ update msg model =
                 | status = Nothing
                 , state = SignIn
                 , email = ""
+                , emailError = Nothing
                 , password = ""
+                , passwordError = Nothing
               }
             , Cmd.none
             )
@@ -452,6 +454,8 @@ update msg model =
             ( { model
                 | status = Just (Info "Use the magic link to sign in via email")
                 , state = MagicLink
+                , email = ""
+                , emailError = Nothing
               }
             , Cmd.none
             )
