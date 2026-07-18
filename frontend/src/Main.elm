@@ -1080,7 +1080,7 @@ view model =
          ]
             ++ (case model.state of
                     Start ->
-                        selectView
+                        [ selectView ]
 
                     SignUp ->
                         signUpView model.email model.password model.passwordConfirm
@@ -1180,12 +1180,13 @@ statusView maybeStatus =
                 [ text message ]
 
 
-selectView : List (Html Msg)
+selectView : Html Msg
 selectView =
-    [ gotoButton "Sign up" GotoSignUp
-    , gotoButton "Sign in" GotoSignIn
-    , gotoButton "Magic link" GotoMagicLink
-    ]
+    buttons
+        [ gotoButton "Sign up" GotoSignUp
+        , gotoButton "Sign in" GotoSignIn
+        , gotoButton "Magic link" GotoMagicLink
+        ]
 
 
 signUpView : String -> String -> String -> List (Html Msg)
@@ -1193,8 +1194,10 @@ signUpView email password passwordConfirm =
     [ emailInput email EmailUpdated
     , passwordInput password PasswordUpdated
     , passwordConfirmInput passwordConfirm PasswordConfirmUpdated
-    , gotoStartButton GotoStart
-    , attemptButton "Sign up" AttemptPasswordSignUp
+    , buttons
+        [ gotoStartButton GotoStart
+        , attemptButton "Sign up" AttemptPasswordSignUp
+        ]
     ]
 
 
@@ -1202,16 +1205,20 @@ signInView : String -> String -> List (Html Msg)
 signInView email password =
     [ emailInput email EmailUpdated
     , passwordInput password PasswordUpdated
-    , gotoStartButton GotoStart
-    , attemptButton "Sign in" AttemptPasswordSignIn
+    , buttons
+        [ gotoStartButton GotoStart
+        , attemptButton "Sign in" AttemptPasswordSignIn
+        ]
     ]
 
 
 magicLinkView : String -> List (Html Msg)
 magicLinkView email =
     [ emailInput email EmailUpdated
-    , gotoStartButton GotoStart
-    , attemptButton "Send magic link" AttemptMagicLinkSignIn
+    , buttons
+        [ gotoStartButton GotoStart
+        , attemptButton "Send magic link" AttemptMagicLinkSignIn
+        ]
     ]
 
 
@@ -1220,8 +1227,10 @@ createNoteView title body =
     [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Create Note" ]
     , notesTitleInput title TitleUpdated
     , notesContentInput body BodyUpdated
-    , attemptButton "Create note" AttemptCreateNote
-    , gotoButton "Back to Notes" GotoNotes
+    , buttons
+        [ attemptButton "Create note" AttemptCreateNote
+        , gotoButton "Back to Notes" GotoNotes
+        ]
     ]
 
 
@@ -1257,16 +1266,18 @@ deleteNoteView state maybeNote =
                 [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text note.title ]
                 , p [ style "margin" "0" ] [ text note.body ]
                 ]
-            , case state of
-                DeleteReady ->
-                    attemptButton "Confirm Delete" AttemptDeleteNoteHard
+            , buttons
+                [ case state of
+                    DeleteReady ->
+                        attemptButton "Confirm Delete" AttemptDeleteNoteHard
 
-                DeleteSuccess ->
-                    div [] []
+                    DeleteSuccess ->
+                        div [] []
 
-                DeleteFailure ->
-                    div [] []
-            , gotoButton "Back to Notes" GotoNotes
+                    DeleteFailure ->
+                        div [] []
+                , gotoButton "Back to Notes" GotoNotes
+                ]
             ]
 
         Nothing ->
@@ -1287,17 +1298,19 @@ trashingNoteView state maybeNote =
                 [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text note.title ]
                 , p [ style "margin" "0" ] [ text note.body ]
                 ]
-            , case state of
-                DeleteReady ->
-                    attemptButton "Confirm" AttemptDeleteNoteSoft
+            , buttons
+                [ case state of
+                    DeleteReady ->
+                        attemptButton "Confirm" AttemptDeleteNoteSoft
 
-                DeleteSuccess ->
-                    attemptButton "Reinstate" <|
-                        AttemptRestoreNote note
+                    DeleteSuccess ->
+                        attemptButton "Reinstate" <|
+                            AttemptRestoreNote note
 
-                DeleteFailure ->
-                    div [] []
-            , gotoButton "Back to Notes" GotoNotes
+                    DeleteFailure ->
+                        div [] []
+                , gotoButton "Back to Notes" GotoNotes
+                ]
             ]
 
         Nothing ->
@@ -1309,8 +1322,10 @@ editNoteView title body =
     [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Edit Note" ]
     , notesTitleInput title TitleUpdated
     , notesContentInput body BodyUpdated
-    , attemptButton "Update note" AttemptUpdateNote
-    , gotoButton "Back to Notes" GotoNotes
+    , buttons
+        [ attemptButton "Update note" AttemptUpdateNote
+        , gotoButton "Back to Notes" GotoNotes
+        ]
     ]
 
 
@@ -1318,9 +1333,11 @@ searchNotesView : String -> List Supabase.Note -> List (Html Msg)
 searchNotesView searchQuery searchResults =
     [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Search Notes" ]
     , searchNotesInput searchQuery SearchQueryUpdated
-    , searchButton AttemptSearchNotes
-    , clearResultsButton ClearResults
-    , gotoButton "Back to Notes" GotoNotes
+    , buttons
+        [ searchButton AttemptSearchNotes
+        , clearResultsButton ClearResults
+        , gotoButton "Back to Notes" GotoNotes
+        ]
     , div [ style "margin-top" "1rem" ] (List.map noteCard searchResults)
     ]
 
@@ -1335,11 +1352,7 @@ noteCard note =
         ]
         [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text note.title ]
         , p [ style "margin" "0" ] [ text note.body ]
-        , div
-            [ style "display" "flex"
-            , style "gap" "0.5rem"
-            , style "margin-top" "0.5rem"
-            ]
+        , buttons
             [ gotoButton "Edit" (GotoEditNote note)
             , gotoButton "Trash Note" (GotoTrashNote note)
             ]
@@ -1356,6 +1369,18 @@ trashedNoteCard note =
         ]
         [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text note.title ]
         , p [ style "margin" "0" ] [ text note.body ]
-        , attemptButton "Restore" (AttemptRestoreNote note)
-        , gotoButton "Delete" (GotoDeleteNote note)
+        , buttons
+            [ attemptButton "Restore" (AttemptRestoreNote note)
+            , gotoButton "Delete" (GotoDeleteNote note)
+            ]
         ]
+
+
+buttons : List (Html Msg) -> Html Msg
+buttons btns =
+    div
+        [ style "display" "flex"
+        , style "gap" "0.5rem"
+        , style "margin-top" "0.5rem"
+        ]
+        btns
