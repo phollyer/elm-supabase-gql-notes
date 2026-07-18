@@ -380,6 +380,24 @@ refreshSessionCmd model =
     Supabase.sendCommand (Supabase.RefreshSession { requestId = nextRequestId model })
 
 
+fetchNotes : Model -> ( Model, Cmd Msg )
+fetchNotes model =
+    case model.accessToken of
+        Just accessToken ->
+            ( { model
+                | state = SignedIn ViewingNotes
+                , status = Just (Info "Loading notes...")
+                , notes = []
+              }
+            , fetchNotesCmd model.config accessToken
+            )
+
+        Nothing ->
+            ( { model | status = Just (Error "No access token. Re-checking session...") }
+            , refreshSessionCmd model
+            )
+
+
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Supabase.supabaseIn SupabaseEventReceived
@@ -474,12 +492,7 @@ update msg model =
             )
 
         GotoNotes ->
-            ( { model
-                | status = Nothing
-                , state = SignedIn ViewingNotes
-              }
-            , fetchNotesCmd model.config (Maybe.withDefault "" model.accessToken)
-            )
+            fetchNotes model
 
         GotoSearch ->
             ( { model
@@ -611,16 +624,7 @@ update msg model =
             )
 
         AttemptFetchNotes ->
-            case model.accessToken of
-                Just accessToken ->
-                    ( { model | status = Just (Info "Loading notes...") }
-                    , fetchNotesCmd model.config accessToken
-                    )
-
-                Nothing ->
-                    ( { model | status = Just (Error "No access token. Re-checking session...") }
-                    , refreshSessionCmd model
-                    )
+            fetchNotes model
 
         AttemptFetchTrash ->
             case model.accessToken of
