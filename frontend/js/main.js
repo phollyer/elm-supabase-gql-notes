@@ -9,7 +9,7 @@ import {
     signInWithMagicLink,
     signOut
 } from './supabase/auth.js'
-import { createNote, fetchNotes, searchNotes } from './supabase/data.js'
+import { createNote, fetchNotes, searchNotes, uploadAvatar } from './supabase/data.js'
 
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY
 const graphqlUrl = `${import.meta.env.VITE_SUPABASE_URL}/graphql/v1`
@@ -64,6 +64,10 @@ const run = async (message) => {
 
         case 'search-notes':
             emit(await searchNotes(requestId, message.query))
+            return
+
+        case 'upload-avatar':
+            emit(await uploadAvatar(requestId))
             return
 
         default:

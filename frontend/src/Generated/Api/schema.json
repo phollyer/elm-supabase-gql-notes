@@ -2739,6 +2739,18 @@
                             "description": null,
                             "isDeprecated": false,
                             "deprecationReason": null
+                        },
+                        {
+                            "args": [],
+                            "name": "avatarPath",
+                            "type": {
+                                "kind": "SCALAR",
+                                "name": "String",
+                                "ofType": null
+                            },
+                            "description": null,
+                            "isDeprecated": false,
+                            "deprecationReason": null
                         }
                     ],
                     "enumValues": [],
@@ -2957,6 +2969,16 @@
                             "defaultValue": null
                         },
                         {
+                            "name": "avatarPath",
+                            "type": {
+                                "kind": "INPUT_OBJECT",
+                                "name": "StringFilter",
+                                "ofType": null
+                            },
+                            "description": null,
+                            "defaultValue": null
+                        },
+                        {
                             "name": "nodeId",
                             "type": {
                                 "kind": "INPUT_OBJECT",
@@ -3068,6 +3090,16 @@
                             "type": {
                                 "kind": "SCALAR",
                                 "name": "Datetime",
+                                "ofType": null
+                            },
+                            "description": null,
+                            "defaultValue": null
+                        },
+                        {
+                            "name": "avatarPath",
+                            "type": {
+                                "kind": "SCALAR",
+                                "name": "String",
                                 "ofType": null
                             },
                             "description": null,
@@ -3184,6 +3216,16 @@
                             },
                             "description": null,
                             "defaultValue": null
+                        },
+                        {
+                            "name": "avatarPath",
+                            "type": {
+                                "kind": "ENUM",
+                                "name": "OrderByDirection",
+                                "ofType": null
+                            },
+                            "description": null,
+                            "defaultValue": null
                         }
                     ],
                     "possibleTypes": null
@@ -3241,6 +3283,16 @@
                             "type": {
                                 "kind": "SCALAR",
                                 "name": "Datetime",
+                                "ofType": null
+                            },
+                            "description": null,
+                            "defaultValue": null
+                        },
+                        {
+                            "name": "avatarPath",
+                            "type": {
+                                "kind": "SCALAR",
+                                "name": "String",
                                 "ofType": null
                             },
                             "description": null,

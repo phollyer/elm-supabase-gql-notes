@@ -1,6 +1,7 @@
 module Api.Input.ProfilesFilter exposing
     ( ProfilesFilter
     , and
+    , avatarPath
     , createdAt
     , decoder
     , displayName
@@ -25,7 +26,7 @@ module Api.Input.ProfilesFilter exposing
 
 ## Optional fields
 
-@docs id, email, displayName, createdAt, updatedAt, nodeId, and, or, not
+@docs id, email, displayName, createdAt, updatedAt, avatarPath, nodeId, and, or, not
 -}
 
 
@@ -90,6 +91,15 @@ updatedAt newArg_ inputObj_ =
         inputObj_
 
 
+avatarPath : Api.Input.StringFilter -> ProfilesFilter -> ProfilesFilter
+avatarPath newArg_ inputObj_ =
+    GraphQL.InputObject.addField
+        "avatarPath"
+        "StringFilter"
+        (GraphQL.InputObject.encode newArg_)
+        inputObj_
+
+
 nodeId : Api.Input.IDFilter -> ProfilesFilter -> ProfilesFilter
 nodeId newArg_ inputObj_ =
     GraphQL.InputObject.addField
@@ -132,6 +142,7 @@ null :
     , displayName : ProfilesFilter -> ProfilesFilter
     , createdAt : ProfilesFilter -> ProfilesFilter
     , updatedAt : ProfilesFilter -> ProfilesFilter
+    , avatarPath : ProfilesFilter -> ProfilesFilter
     , nodeId : ProfilesFilter -> ProfilesFilter
     , and : ProfilesFilter -> ProfilesFilter
     , or : ProfilesFilter -> ProfilesFilter
@@ -171,6 +182,13 @@ null =
             GraphQL.InputObject.addField
                 "updatedAt"
                 "DatetimeFilter"
+                Json.Encode.null
+                inputObj
+    , avatarPath =
+        \inputObj ->
+            GraphQL.InputObject.addField
+                "avatarPath"
+                "StringFilter"
                 Json.Encode.null
                 inputObj
     , nodeId =
@@ -227,6 +245,7 @@ decoder =
                       , { name = "displayName", type_ = "StringFilter" }
                       , { name = "createdAt", type_ = "DatetimeFilter" }
                       , { name = "updatedAt", type_ = "DatetimeFilter" }
+                      , { name = "avatarPath", type_ = "StringFilter" }
                       , { name = "nodeId", type_ = "IDFilter" }
                       , { name = "and", type_ = "[ProfilesFilter!]" }
                       , { name = "or", type_ = "[ProfilesFilter!]" }

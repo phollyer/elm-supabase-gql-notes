@@ -22,6 +22,7 @@ type Command
     | FetchNotes { requestId : String }
     | CreateNote { requestId : String, title : String, body : String }
     | SearchNotes { requestId : String, query : String }
+    | UploadAvatar { requestId : String }
 
 
 type Event
@@ -30,6 +31,7 @@ type Event
     | NotesLoaded { requestId : String, notes : List Note }
     | NotesFound { requestId : String, notes : List Note }
     | NoteCreated { requestId : String, note : Note }
+    | AvatarUploaded { requestId : String, avatarUrl : String, avatarPath : String }
     | ErrorRaised { requestId : String, message : String }
 
 
@@ -130,6 +132,12 @@ encodeCommand command =
                 , ( "query", Encode.string payload.query )
                 ]
 
+        UploadAvatar payload ->
+            Encode.object
+                [ ( "type", Encode.string "upload-avatar" )
+                , ( "requestId", Encode.string payload.requestId )
+                ]
+
 
 commandDecoder : Decoder Event
 commandDecoder =
@@ -177,6 +185,13 @@ decodeByType eventType =
                 (\requestId note -> NoteCreated { requestId = requestId, note = note })
                 (Decode.field "requestId" Decode.string)
                 (Decode.field "note" noteDecoder)
+
+        "avatar-uploaded" ->
+            Decode.map3
+                (\requestId avatarUrl avatarPath -> AvatarUploaded { requestId = requestId, avatarUrl = avatarUrl, avatarPath = avatarPath })
+                (Decode.field "requestId" Decode.string)
+                (Decode.field "avatarUrl" Decode.string)
+                (Decode.field "avatarPath" Decode.string)
 
         "error" ->
             Decode.map2

@@ -1,0 +1,10 @@
+query GetProfile($id: UUID!) {
+    profilesByPk(id: $id) {
+        id
+        email
+        displayName
+        avatarPath
+        createdAt
+        updatedAt
+    }
+}

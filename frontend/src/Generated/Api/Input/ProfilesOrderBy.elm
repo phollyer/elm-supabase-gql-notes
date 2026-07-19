@@ -1,5 +1,6 @@
 module Api.Input.ProfilesOrderBy exposing
     ( ProfilesOrderBy
+    , avatarPath
     , createdAt
     , decoder
     , displayName
@@ -21,7 +22,7 @@ module Api.Input.ProfilesOrderBy exposing
 
 ## Optional fields
 
-@docs id, email, displayName, createdAt, updatedAt
+@docs id, email, displayName, createdAt, updatedAt, avatarPath
 -}
 
 
@@ -102,12 +103,25 @@ updatedAt newArg_ inputObj_ =
         inputObj_
 
 
+avatarPath :
+    Api.Enum.OrderByDirection.OrderByDirection
+    -> ProfilesOrderBy
+    -> ProfilesOrderBy
+avatarPath newArg_ inputObj_ =
+    GraphQL.InputObject.addField
+        "avatarPath"
+        "OrderByDirection"
+        (Api.Enum.OrderByDirection.encode newArg_)
+        inputObj_
+
+
 null :
     { id : ProfilesOrderBy -> ProfilesOrderBy
     , email : ProfilesOrderBy -> ProfilesOrderBy
     , displayName : ProfilesOrderBy -> ProfilesOrderBy
     , createdAt : ProfilesOrderBy -> ProfilesOrderBy
     , updatedAt : ProfilesOrderBy -> ProfilesOrderBy
+    , avatarPath : ProfilesOrderBy -> ProfilesOrderBy
     }
 null =
     { id =
@@ -145,6 +159,13 @@ null =
                 "OrderByDirection"
                 Json.Encode.null
                 inputObj
+    , avatarPath =
+        \inputObj ->
+            GraphQL.InputObject.addField
+                "avatarPath"
+                "OrderByDirection"
+                Json.Encode.null
+                inputObj
     }
 
 
@@ -171,6 +192,7 @@ decoder =
                       , { name = "displayName", type_ = "OrderByDirection" }
                       , { name = "createdAt", type_ = "OrderByDirection" }
                       , { name = "updatedAt", type_ = "OrderByDirection" }
+                      , { name = "avatarPath", type_ = "OrderByDirection" }
                       ]
                  )
         )

@@ -1,5 +1,6 @@
 module Api.Input.ProfilesUpdateInput exposing
     ( ProfilesUpdateInput
+    , avatarPath
     , createdAt
     , decoder
     , displayName
@@ -21,7 +22,7 @@ module Api.Input.ProfilesUpdateInput exposing
 
 ## Optional fields
 
-@docs id, email, displayName, createdAt, updatedAt
+@docs id, email, displayName, createdAt, updatedAt, avatarPath
 -}
 
 
@@ -83,12 +84,22 @@ updatedAt newArg_ inputObj_ =
         inputObj_
 
 
+avatarPath : String -> ProfilesUpdateInput -> ProfilesUpdateInput
+avatarPath newArg_ inputObj_ =
+    GraphQL.InputObject.addField
+        "avatarPath"
+        "String"
+        (Json.Encode.string newArg_)
+        inputObj_
+
+
 null :
     { id : ProfilesUpdateInput -> ProfilesUpdateInput
     , email : ProfilesUpdateInput -> ProfilesUpdateInput
     , displayName : ProfilesUpdateInput -> ProfilesUpdateInput
     , createdAt : ProfilesUpdateInput -> ProfilesUpdateInput
     , updatedAt : ProfilesUpdateInput -> ProfilesUpdateInput
+    , avatarPath : ProfilesUpdateInput -> ProfilesUpdateInput
     }
 null =
     { id =
@@ -122,6 +133,13 @@ null =
                 "Datetime"
                 Json.Encode.null
                 inputObj
+    , avatarPath =
+        \inputObj ->
+            GraphQL.InputObject.addField
+                "avatarPath"
+                "String"
+                Json.Encode.null
+                inputObj
     }
 
 
@@ -148,6 +166,7 @@ decoder =
                       , { name = "displayName", type_ = "String" }
                       , { name = "createdAt", type_ = "Datetime" }
                       , { name = "updatedAt", type_ = "Datetime" }
+                      , { name = "avatarPath", type_ = "String" }
                       ]
                  )
         )

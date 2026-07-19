@@ -6,18 +6,20 @@ import CreateNote.CreateNote as CreateNote
 import DeleteNoteHard.DeleteNoteHard as DeleteNoteHard
 import DeleteNoteSoft.DeleteNoteSoft as DeleteNoteSoft
 import GetActiveNotes.GetActiveNotes as GetActiveNotes
+import GetProfile.GetProfile as GetProfile
 import GetTrashedNotes.GetTrashedNotes as GetTrashedNotes
 import GraphQL.Engine
-import Html exposing (Html, div, h1, p, text)
-import Html.Attributes exposing (style, value)
+import Html exposing (..)
+import Html.Attributes exposing (..)
 import Http
 import Json.Decode as Decode
 import Ports.Supabase as Supabase
 import RestoreNote.RestoreNote as RestoreNote
 import SearchNotes.SearchNotes as SearchNotes
 import String
-import UI.FormElements exposing (attemptButton, clearResultsButton, emailInput, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, passwordConfirmInput, passwordInput, searchButton, searchNotesInput)
+import UI.FormElements exposing (attemptButton, clearResultsButton, emailInput, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, passwordConfirmInput, passwordInput, searchButton, searchNotesInput, uploadButton)
 import UpdateNote.UpdateNote as UpdateNote
+import UpdateProfileAvatar.UpdateProfileAvatar as UpdateProfileAvatar
 
 
 main : Program Flags Model Msg
@@ -43,6 +45,8 @@ type alias Model =
     , title : String
     , titleError : Maybe String
     , body : String
+    , displayName : String
+    , avatarUrl : Maybe String
     , status : Maybe Status
     , state : State
     , currentNote : Maybe Supabase.Note
@@ -80,6 +84,8 @@ init flags =
       , title = ""
       , titleError = Nothing
       , body = ""
+      , displayName = ""
+      , avatarUrl = Nothing
       , status = Just (Info "Checking session...")
       , state = Start
       , currentNote = Nothing
@@ -112,6 +118,7 @@ type ViewState
     = ViewReady
     | ViewingNotes
     | ViewingTrash
+    | ViewingProfile
     | CreatingNote
     | EditingNote
     | SearchingNotes
@@ -129,6 +136,9 @@ type Msg
     = EmailUpdated String
     | PasswordUpdated String
     | PasswordConfirmUpdated String
+    | TitleUpdated String
+    | BodyUpdated String
+    | UploadAvatarClicked
     | StartSessionCheck
     | AttemptPasswordSignIn
     | AttemptPasswordSignUp
@@ -142,6 +152,7 @@ type Msg
     | AttemptFetchNotes
     | AttemptFetchTrash
     | AttemptSearchNotes
+    | AttemptFetchProfile
     | SearchQueryUpdated String
     | ClearResults
     | GotoStart
@@ -154,9 +165,7 @@ type Msg
     | GotoEditNote Supabase.Note
     | GotoDeleteNote Supabase.Note
     | GotoTrashNote Supabase.Note
-    | TitleUpdated String
-    | BodyUpdated String
-    | SupabaseEventReceived Decode.Value
+    | GotoProfilePage
     | GraphqlNotesLoaded (Result GraphQL.Engine.Error GetActiveNotes.Response)
     | GraphqlNoteCreated (Result GraphQL.Engine.Error CreateNote.Response)
     | GraphqlNoteDeletedHard (Result GraphQL.Engine.Error DeleteNoteHard.Response)
@@ -165,6 +174,9 @@ type Msg
     | GraphqlNoteUpdated (Result GraphQL.Engine.Error UpdateNote.Response)
     | GraphqlSearchNotesLoaded (Result GraphQL.Engine.Error SearchNotes.Response)
     | GraphqlTrashLoaded (Result GraphQL.Engine.Error GetTrashedNotes.Response)
+    | GraphqlAvatarPathUpdated (Result GraphQL.Engine.Error UpdateProfileAvatar.Response)
+    | GraphqlProfileLoaded (Result GraphQL.Engine.Error GetProfile.Response)
+    | SupabaseEventReceived Decode.Value
 
 
 graphqlHeaders : String -> String -> List Http.Header
@@ -380,6 +392,36 @@ searchNotesCmd config accessToken query =
             }
 
 
+fetchProfileCmd : Config -> String -> String -> Cmd Msg
+fetchProfileCmd config accessToken userId =
+    Cmd.map GraphqlProfileLoaded <|
+        Api.query
+            (GetProfile.query
+                { id = Uuid userId }
+            )
+            { headers = graphqlHeaders config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
+
+
+updateProfileAvatarPathCmd : Config -> String -> String -> String -> Cmd Msg
+updateProfileAvatarPathCmd config accessToken userId avatarPath =
+    Cmd.map GraphqlAvatarPathUpdated <|
+        Api.mutation
+            (UpdateProfileAvatar.mutation
+                { id = Uuid userId
+                , avatarPath = Api.present avatarPath
+                }
+            )
+            { headers = graphqlHeaders config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
+
+
 refreshSessionCmd : Model -> Cmd Msg
 refreshSessionCmd model =
     Supabase.sendCommand (Supabase.RefreshSession { requestId = nextRequestId model })
@@ -511,6 +553,19 @@ update msg model =
             , Cmd.none
             )
 
+        GotoProfilePage ->
+            ( { model
+                | status = Nothing
+                , state = SignedIn ViewingProfile
+              }
+            , case ( model.accessToken, model.userId ) of
+                ( Just accessToken, Just userId ) ->
+                    fetchProfileCmd model.config accessToken userId
+
+                _ ->
+                    Cmd.none
+            )
+
         SearchQueryUpdated value ->
             ( { model | searchQuery = value }, Cmd.none )
 
@@ -525,6 +580,9 @@ update msg model =
 
         PasswordConfirmUpdated value ->
             ( { model | passwordConfirm = value }, Cmd.none )
+
+        UploadAvatarClicked ->
+            ( model, Supabase.sendCommand (Supabase.UploadAvatar { requestId = nextRequestId model }) )
 
         AttemptPasswordSignUp ->
             let
@@ -745,6 +803,18 @@ update msg model =
                     , refreshSessionCmd model
                     )
 
+        AttemptFetchProfile ->
+            case ( model.accessToken, model.userId ) of
+                ( Just accessToken, Just userId ) ->
+                    ( { model | status = Just (Info "Loading profile...") }
+                    , fetchProfileCmd model.config accessToken userId
+                    )
+
+                _ ->
+                    ( { model | status = Just (Error "Session info missing. Re-checking session...") }
+                    , refreshSessionCmd model
+                    )
+
         GraphqlNoteCreated result ->
             case result of
                 Ok response ->
@@ -947,6 +1017,30 @@ update msg model =
                 Err error ->
                     handleGraphqlFailure "GraphQL search failed" error model
 
+        GraphqlAvatarPathUpdated result ->
+            case result of
+                Ok response ->
+                    case response.updateProfilesCollection.affectedCount of
+                        1 ->
+                            ( { model
+                                | status = Just (Success "Avatar path updated successfully")
+                              }
+                            , Cmd.none
+                            )
+
+                        0 ->
+                            ( { model | status = Just (Error "Update avatar mutation returned no records") }
+                            , Cmd.none
+                            )
+
+                        _ ->
+                            ( { model | status = Just (Error "Update avatar mutation affected multiple records, which is unexpected") }
+                            , Cmd.none
+                            )
+
+                Err error ->
+                    handleGraphqlFailure "GraphQL avatar path update failed" error model
+
         GraphqlTrashLoaded result ->
             case result of
                 Ok response ->
@@ -961,6 +1055,25 @@ update msg model =
 
                 Err error ->
                     handleGraphqlFailure "GraphQL trash load failed" error model
+
+        GraphqlProfileLoaded result ->
+            case result of
+                Ok response ->
+                    case response.profilesByPk of
+                        Just profile ->
+                            ( { model
+                                | displayName = Maybe.withDefault "" profile.displayName
+                                , avatarUrl = Maybe.map (\path -> "http://localhost:54321/storage/v1/object/public/avatar/" ++ path) profile.avatarPath
+                                , status = Just (Success "Profile loaded")
+                              }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            ( { model | status = Just (Error "Profile not found") }, Cmd.none )
+
+                Err error ->
+                    handleGraphqlFailure "GraphQL profile load failed" error model
 
         TitleUpdated value ->
             ( { model | title = value }, Cmd.none )
@@ -1027,6 +1140,21 @@ applyEvent event model =
               }
             , Cmd.none
             )
+
+        Supabase.AvatarUploaded payload ->
+            case ( model.accessToken, model.userId ) of
+                ( Just accessToken, Just userId ) ->
+                    ( { model
+                        | status = Just (Success "Avatar uploaded")
+                        , avatarUrl = Just payload.avatarUrl
+                      }
+                    , updateProfileAvatarPathCmd model.config accessToken userId payload.avatarPath
+                    )
+
+                _ ->
+                    ( { model | status = Just (Error "Session info missing. Re-checking session...") }
+                    , refreshSessionCmd model
+                    )
 
         Supabase.ErrorRaised payload ->
             ( { model | status = Just (Error payload.message) }
@@ -1114,6 +1242,7 @@ view model =
                         , style "margin-left" "auto"
                         ]
                         [ attemptButton "Trash" AttemptFetchTrash
+                        , gotoButton "Profile" GotoProfilePage
                         , attemptButton "Sign out" AttemptSignOut
                         ]
                     ]
@@ -1172,6 +1301,9 @@ view model =
 
                     SignedIn (TrashingNote state) ->
                         trashingNoteView state model.currentNote
+
+                    SignedIn ViewingProfile ->
+                        profileView model.email model.displayName model.avatarUrl
                )
         )
 
@@ -1455,3 +1587,62 @@ buttons btns =
         , style "margin-top" "0.5rem"
         ]
         btns
+
+
+
+{- ######### Profile View ######### -}
+
+
+profileView : String -> String -> Maybe String -> List (Html Msg)
+profileView email displayName maybeAvatarUrl =
+    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Profile" ]
+    , div
+        [ style "display" "flex"
+        , style "align-items" "center"
+        , style "gap" "0.5rem"
+        , style "margin-bottom" "0.5rem"
+        ]
+        [ case maybeAvatarUrl of
+            Just avatarUrl ->
+                img
+                    [ src avatarUrl
+                    , alt "Avatar"
+                    , style "width" "50px"
+                    , style "height" "50px"
+                    , style "border-radius" "50%"
+                    ]
+                    []
+
+            _ ->
+                img
+                    [ src "https://via.placeholder.com/50"
+                    , alt "Avatar"
+                    , style "width" "50px"
+                    , style "height" "50px"
+                    , style "border-radius" "50%"
+                    ]
+                    []
+        , uploadButton "Upload Avatar" UploadAvatarClicked
+        ]
+    , div
+        [ style "border" "1px solid #ddd"
+        , style "padding" "0.75rem"
+        , style "border-radius" "0.5rem"
+        , style "margin-bottom" "0.5rem"
+        ]
+        [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text "Display Name" ]
+        , p [ style "margin" "0" ] [ text displayName ]
+        ]
+    , div
+        [ style "border" "1px solid #ddd"
+        , style "padding" "0.75rem"
+        , style "border-radius" "0.5rem"
+        , style "margin-bottom" "0.5rem"
+        ]
+        [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text "Email" ]
+        , p [ style "margin" "0" ] [ text email ]
+        ]
+    , buttons
+        [ gotoButton "Back to Notes" GotoNotes
+        ]
+    ]

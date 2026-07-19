@@ -10,6 +10,7 @@ module UI.FormElements exposing
     , passwordInput
     , searchButton
     , searchNotesInput
+    , uploadButton
     )
 
 import Html exposing (..)
@@ -52,6 +53,21 @@ clearResultsButton onClickMsg =
     button
         [ onClick onClickMsg, style "margin-right" "0.5rem" ]
         [ text "Clear Results" ]
+
+
+uploadButton : String -> msg -> Html msg
+uploadButton label onClickMsg =
+    button
+        [ onClick onClickMsg
+        , style "margin-right" "0.5rem"
+        , style "padding" "0.5rem 1rem"
+        , style "background-color" "#2563eb"
+        , style "color" "#ffffff"
+        , style "border" "none"
+        , style "border-radius" "0.375rem"
+        , style "cursor" "pointer"
+        ]
+        [ text label ]
 
 
 
