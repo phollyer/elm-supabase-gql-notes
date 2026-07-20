@@ -13,11 +13,12 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Http
 import Json.Decode as Decode
+import Pages.Profile as Profile
 import Ports.Supabase as Supabase
 import RestoreNote.RestoreNote as RestoreNote
 import SearchNotes.SearchNotes as SearchNotes
 import String
-import UI.FormElements exposing (attemptButton, clearResultsButton, emailInput, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, passwordConfirmInput, passwordInput, searchButton, searchNotesInput, uploadButton)
+import UI.FormElements exposing (attemptButton, clearResultsButton, emailInput, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, passwordConfirmInput, passwordInput, searchButton, searchNotesInput)
 import UpdateNote.UpdateNote as UpdateNote
 import UpdateProfileAvatar.UpdateProfileAvatar as UpdateProfileAvatar
 
@@ -45,8 +46,7 @@ type alias Model =
     , title : String
     , titleError : Maybe String
     , body : String
-    , displayName : String
-    , avatarUrl : Maybe String
+    , profilePage : Profile.Model
     , status : Maybe Status
     , state : State
     , currentNote : Maybe Supabase.Note
@@ -84,8 +84,7 @@ init flags =
       , title = ""
       , titleError = Nothing
       , body = ""
-      , displayName = ""
-      , avatarUrl = Nothing
+      , profilePage = Profile.init
       , status = Just (Info "Checking session...")
       , state = Start
       , currentNote = Nothing
@@ -133,12 +132,12 @@ type DeleteState
 
 
 type Msg
-    = EmailUpdated String
+    = ProfileMsg Profile.Msg
+    | EmailUpdated String
     | PasswordUpdated String
     | PasswordConfirmUpdated String
     | TitleUpdated String
     | BodyUpdated String
-    | UploadAvatarClicked
     | StartSessionCheck
     | AttemptPasswordSignIn
     | AttemptPasswordSignUp
@@ -458,6 +457,15 @@ update msg model =
             , refreshSessionCmd model
             )
 
+        ProfileMsg profileMsg ->
+            let
+                ( updatedProfileModel, profileCmd ) =
+                    Profile.update profileMsg model.profilePage
+            in
+            ( { model | profilePage = updatedProfileModel }
+            , Cmd.map ProfileMsg profileCmd
+            )
+
         GotoStart ->
             ( { model
                 | status = Just (Info "Please sign up or sign in")
@@ -580,9 +588,6 @@ update msg model =
 
         PasswordConfirmUpdated value ->
             ( { model | passwordConfirm = value }, Cmd.none )
-
-        UploadAvatarClicked ->
-            ( model, Supabase.sendCommand (Supabase.UploadAvatar { requestId = nextRequestId model }) )
 
         AttemptPasswordSignUp ->
             let
@@ -1062,8 +1067,11 @@ update msg model =
                     case response.profilesByPk of
                         Just profile ->
                             ( { model
-                                | displayName = Maybe.withDefault "" profile.displayName
-                                , avatarUrl = Maybe.map (\path -> "http://localhost:54321/storage/v1/object/public/avatar/" ++ path) profile.avatarPath
+                                | profilePage =
+                                    model.profilePage
+                                        |> Profile.setEmailAddress profile.email
+                                        |> Profile.setDisplayName (Maybe.withDefault "" profile.displayName)
+                                        |> Profile.setAvatarUrl (Maybe.map (\path -> "http://localhost:54321/storage/v1/object/public/avatar/" ++ path) profile.avatarPath)
                                 , status = Just (Success "Profile loaded")
                               }
                             , Cmd.none
@@ -1146,7 +1154,7 @@ applyEvent event model =
                 ( Just accessToken, Just userId ) ->
                     ( { model
                         | status = Just (Success "Avatar uploaded")
-                        , avatarUrl = Just payload.avatarUrl
+                        , profilePage = Profile.setAvatarUrl (Just payload.avatarUrl) model.profilePage
                       }
                     , updateProfileAvatarPathCmd model.config accessToken userId payload.avatarPath
                     )
@@ -1303,7 +1311,8 @@ view model =
                         trashingNoteView state model.currentNote
 
                     SignedIn ViewingProfile ->
-                        profileView model.email model.displayName model.avatarUrl
+                        Profile.view model.profilePage
+                            |> List.map (Html.map ProfileMsg)
                )
         )
 
@@ -1587,62 +1596,3 @@ buttons btns =
         , style "margin-top" "0.5rem"
         ]
         btns
-
-
-
-{- ######### Profile View ######### -}
-
-
-profileView : String -> String -> Maybe String -> List (Html Msg)
-profileView email displayName maybeAvatarUrl =
-    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Profile" ]
-    , div
-        [ style "display" "flex"
-        , style "align-items" "center"
-        , style "gap" "0.5rem"
-        , style "margin-bottom" "0.5rem"
-        ]
-        [ case maybeAvatarUrl of
-            Just avatarUrl ->
-                img
-                    [ src avatarUrl
-                    , alt "Avatar"
-                    , style "width" "50px"
-                    , style "height" "50px"
-                    , style "border-radius" "50%"
-                    ]
-                    []
-
-            _ ->
-                img
-                    [ src "https://via.placeholder.com/50"
-                    , alt "Avatar"
-                    , style "width" "50px"
-                    , style "height" "50px"
-                    , style "border-radius" "50%"
-                    ]
-                    []
-        , uploadButton "Upload Avatar" UploadAvatarClicked
-        ]
-    , div
-        [ style "border" "1px solid #ddd"
-        , style "padding" "0.75rem"
-        , style "border-radius" "0.5rem"
-        , style "margin-bottom" "0.5rem"
-        ]
-        [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text "Display Name" ]
-        , p [ style "margin" "0" ] [ text displayName ]
-        ]
-    , div
-        [ style "border" "1px solid #ddd"
-        , style "padding" "0.75rem"
-        , style "border-radius" "0.5rem"
-        , style "margin-bottom" "0.5rem"
-        ]
-        [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text "Email" ]
-        , p [ style "margin" "0" ] [ text email ]
-        ]
-    , buttons
-        [ gotoButton "Back to Notes" GotoNotes
-        ]
-    ]
