@@ -25,7 +25,6 @@ import Ports.Supabase as Supabase
 import RestoreNote.RestoreNote as RestoreNote
 import SearchNotes.SearchNotes as SearchNotes
 import UI.FormElements exposing (attemptButton, buttons, clearResultsButton, gotoButton, gotoStartButton, searchButton, searchNotesInput)
-import UpdateNote.UpdateNote as UpdateNote
 import UpdateProfileAvatar.UpdateProfileAvatar as UpdateProfileAvatar
 
 
@@ -196,17 +195,6 @@ getNotesToSupabaseNotes =
 getSearchNotesToSupabaseNotes : SearchNotes.Response -> List Supabase.Note
 getSearchNotesToSupabaseNotes =
     flattenSearchNotes >> List.map toSupabaseSearchNote
-
-
-toSupabaseUpdateNote : UpdateNote.Records -> Supabase.Note
-toSupabaseUpdateNote { id, title, body, createdAt, updatedAt } =
-    { id = uuidToString id
-    , title = title
-    , body = body
-    , createdAt = datetimeToString createdAt
-    , updatedAt = datetimeToString updatedAt
-    , deletedAt = Nothing
-    }
 
 
 toSupabaseDeleteNoteSoft : DeleteNoteSoft.Records -> Supabase.Note
