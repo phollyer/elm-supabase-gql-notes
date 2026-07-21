@@ -13,12 +13,14 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Http
 import Json.Decode as Decode
+import Pages.Auth.MagicLink as MagicLink
 import Pages.Profile as Profile
+import Pages.Shared.Status as Status exposing (Status(..))
 import Ports.Supabase as Supabase
 import RestoreNote.RestoreNote as RestoreNote
 import SearchNotes.SearchNotes as SearchNotes
 import String
-import UI.FormElements exposing (attemptButton, clearResultsButton, emailInput, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, passwordConfirmInput, passwordInput, searchButton, searchNotesInput)
+import UI.FormElements exposing (attemptButton, buttons, clearResultsButton, emailInput, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, passwordConfirmInput, passwordInput, searchButton, searchNotesInput)
 import UpdateNote.UpdateNote as UpdateNote
 import UpdateProfileAvatar.UpdateProfileAvatar as UpdateProfileAvatar
 
@@ -46,6 +48,7 @@ type alias Model =
     , title : String
     , titleError : Maybe String
     , body : String
+    , magicLink : MagicLink.Model
     , profilePage : Profile.Model
     , status : Maybe Status
     , state : State
@@ -84,6 +87,7 @@ init flags =
       , title = ""
       , titleError = Nothing
       , body = ""
+      , magicLink = MagicLink.init
       , profilePage = Profile.init
       , status = Just (Info "Checking session...")
       , state = Start
@@ -96,13 +100,6 @@ init flags =
       }
     , Supabase.sendCommand (Supabase.InitializeSession { requestId = "init-0" })
     )
-
-
-type Status
-    = Success String
-    | Error String
-    | Warning String
-    | Info String
 
 
 type State
@@ -133,6 +130,7 @@ type DeleteState
 
 type Msg
     = ProfileMsg Profile.Msg
+    | MagicLinkMsg MagicLink.Msg
     | EmailUpdated String
     | PasswordUpdated String
     | PasswordConfirmUpdated String
@@ -455,6 +453,15 @@ update msg model =
         StartSessionCheck ->
             ( { model | status = Just (Info "Checking session...") }
             , refreshSessionCmd model
+            )
+
+        MagicLinkMsg magicLinkMsg ->
+            let
+                ( updatedMagicLinkModel, magicLinkCmd ) =
+                    MagicLink.update magicLinkMsg model.magicLink
+            in
+            ( { model | magicLink = updatedMagicLinkModel }
+            , Cmd.map MagicLinkMsg magicLinkCmd
             )
 
         ProfileMsg profileMsg ->
@@ -1257,7 +1264,7 @@ view model =
 
             _ ->
                 div [] []
-         , statusView model.status
+         , Status.view model.status
          ]
             ++ (case model.state of
                     Start ->
@@ -1278,7 +1285,10 @@ view model =
                         signInView model.email model.password
 
                     MagicLink ->
-                        magicLinkView model.email
+                        MagicLink.view
+                            (gotoStartButton GotoStart)
+                            MagicLinkMsg
+                            model.magicLink
 
                     SignedIn ViewReady ->
                         [ h1 [] [ text "Welcome!" ]
@@ -1329,56 +1339,6 @@ headerRow =
         ]
 
 
-statusView : Maybe Status -> Html Msg
-statusView maybeStatus =
-    let
-        ( styles, message ) =
-            case maybeStatus of
-                Just (Info m) ->
-                    ( [ style "background-color" "#e8eaf1"
-                      , style "color" "#030c26"
-                      ]
-                    , m
-                    )
-
-                Just (Success m) ->
-                    ( [ style "background-color" "#047857"
-                      , style "color" "#ffffff"
-                      ]
-                    , m
-                    )
-
-                Just (Warning m) ->
-                    ( [ style "background-color" "#ec8b41"
-                      , style "color" "#030c26"
-                      ]
-                    , m
-                    )
-
-                Just (Error m) ->
-                    ( [ style "background-color" "#b91c1c"
-                      , style "color" "#ffffff"
-                      ]
-                    , m
-                    )
-
-                Nothing ->
-                    ( [], "" )
-    in
-    case ( styles, message ) of
-        ( [], "" ) ->
-            div [ style "display" "none" ] []
-
-        _ ->
-            p
-                (styles
-                    ++ [ style "padding" "0.5rem"
-                       , style "border-radius" "0.75rem"
-                       ]
-                )
-                [ text message ]
-
-
 signUpView : ( String, Maybe String ) -> ( String, Maybe String ) -> ( String, Maybe String ) -> List (Html Msg)
 signUpView ( email, emailError ) ( password, passwordError ) ( passwordConfirm, passwordConfirmError ) =
     [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Sign Up" ]
@@ -1418,16 +1378,6 @@ signInView email password =
     , buttons
         [ gotoStartButton GotoStart
         , attemptButton "Sign in" AttemptPasswordSignIn
-        ]
-    ]
-
-
-magicLinkView : String -> List (Html Msg)
-magicLinkView email =
-    [ emailInput email EmailUpdated
-    , buttons
-        [ gotoStartButton GotoStart
-        , attemptButton "Send magic link" AttemptMagicLinkSignIn
         ]
     ]
 
@@ -1586,13 +1536,3 @@ trashedNoteCard note =
             , gotoButton "Delete" (GotoDeleteNote note)
             ]
         ]
-
-
-buttons : List (Html Msg) -> Html Msg
-buttons btns =
-    div
-        [ style "display" "flex"
-        , style "gap" "0.5rem"
-        , style "margin-top" "0.5rem"
-        ]
-        btns

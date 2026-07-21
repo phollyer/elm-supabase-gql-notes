@@ -1,5 +1,6 @@
 module UI.FormElements exposing
     ( attemptButton
+    , buttons
     , clearResultsButton
     , emailInput
     , gotoButton
@@ -20,6 +21,16 @@ import Html.Events exposing (onClick, onInput)
 
 
 {- ######### Buttons ######### -}
+
+
+buttons : List (Html msg) -> Html msg
+buttons btns =
+    div
+        [ style "display" "flex"
+        , style "gap" "0.5rem"
+        , style "margin-top" "0.5rem"
+        ]
+        btns
 
 
 attemptButton : String -> msg -> Html msg
