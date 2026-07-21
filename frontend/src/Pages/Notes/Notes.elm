@@ -100,7 +100,10 @@ update msg model =
                     )
 
                 Just accessToken ->
-                    ( { model | status = Just (Info "Refreshing notes...") }
+                    ( { model
+                        | status = Just (Info "Refreshing notes...")
+                        , notes = []
+                      }
                     , GraphQL.fetchNotesCmd model.config accessToken GraphQLNotesLoaded
                     )
 
@@ -123,10 +126,11 @@ update msg model =
             GraphQL.handleFailure "GraphQL note update failed" error model
 
 
-view : (Supabase.Note -> msg) -> (Supabase.Note -> msg) -> Model -> List (Html msg)
-view editMsg trashMsg model =
+view : (Supabase.Note -> msg) -> (Supabase.Note -> msg) -> (Msg -> msg) -> Model -> List (Html msg)
+view editMsg trashMsg wrapperMsg model =
     [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Notes" ]
     , Status.view model.status
+    , FE.attemptButton "Refresh Notes" (wrapperMsg Refresh)
     , div [ style "margin-top" "1rem" ] (List.map (noteCard editMsg trashMsg) model.notes)
     ]
 

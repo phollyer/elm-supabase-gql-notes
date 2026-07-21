@@ -1044,7 +1044,7 @@ view model =
                         ]
 
                     SignedIn ViewingNotes ->
-                        Notes.view GotoEditNote GotoTrashNote model.notesPage
+                        Notes.view GotoEditNote GotoTrashNote NotesMsg model.notesPage
 
                     SignedIn ViewingTrash ->
                         signedInTrashView model.trashedNotes
