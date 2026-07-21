@@ -1,6 +1,7 @@
 module Lib.GraphQL exposing
     ( Config
     , createNoteCmd
+    , fetchNotesCmd
     , formatError
     , handleFailure
     , isAuthError
@@ -10,6 +11,7 @@ module Lib.GraphQL exposing
 
 import Api exposing (Datetime(..), Uuid(..))
 import CreateNote.CreateNote as CreateNote
+import GetActiveNotes.GetActiveNotes as GetActiveNotes
 import GraphQL.Engine
 import Http
 import Pages.Shared.Status exposing (Status(..))
@@ -84,6 +86,17 @@ handleFailure prefix error model =
 refreshSessionCmd : String -> Cmd msg
 refreshSessionCmd requestId =
     Supabase.sendCommand (Supabase.RefreshSession { requestId = requestId })
+
+
+fetchNotesCmd : Config -> String -> (Result GraphQL.Engine.Error GetActiveNotes.Response -> msg) -> Cmd msg
+fetchNotesCmd config accessToken graphqlNotesLoaded =
+    Cmd.map graphqlNotesLoaded <|
+        Api.query GetActiveNotes.query
+            { headers = headers config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
 
 
 createNoteCmd : Config -> String -> String -> (Result GraphQL.Engine.Error CreateNote.Response -> msg) -> String -> String -> Cmd msg

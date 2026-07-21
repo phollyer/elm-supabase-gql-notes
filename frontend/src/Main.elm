@@ -19,6 +19,7 @@ import Pages.Auth.SignIn as SignIn
 import Pages.Auth.SignUp as SignUp
 import Pages.Notes.Create as CreateNote
 import Pages.Notes.Edit as EditNote
+import Pages.Notes.Notes as Notes
 import Pages.Profile as Profile
 import Pages.Shared.Status exposing (Status(..))
 import Ports.Supabase as Supabase
@@ -47,6 +48,7 @@ type alias Model =
     , signUpPage : SignUp.Model
     , createNotePage : CreateNote.Model
     , editNotePage : EditNote.Model
+    , notesPage : Notes.Model
     , profilePage : Profile.Model
     , status : Maybe Status
     , state : State
@@ -85,6 +87,7 @@ init flags =
       , signUpPage = SignUp.init
       , createNotePage = CreateNote.init config Nothing Nothing
       , editNotePage = EditNote.init config Nothing Nothing
+      , notesPage = Notes.init config Nothing Nothing
       , profilePage = Profile.init
       , status = Just (Info "Checking session...")
       , state = Start
@@ -132,6 +135,7 @@ type Msg
     | ProfileMsg Profile.Msg
     | CreateNoteMsg CreateNote.Msg
     | EditNoteMsg EditNote.Msg
+    | NotesMsg Notes.Msg
     | StartSessionCheck
     | AttemptSignOut
     | AttemptDeleteNoteHard
@@ -423,6 +427,15 @@ update msg model =
             , Cmd.map EditNoteMsg editNoteCmd
             )
 
+        NotesMsg notesMsg ->
+            let
+                ( updatedNotesModel, notesCmd ) =
+                    Notes.update notesMsg model.notesPage
+            in
+            ( { model | notesPage = updatedNotesModel }
+            , Cmd.map NotesMsg notesCmd
+            )
+
         ProfileMsg profileMsg ->
             let
                 ( updatedProfileModel, profileCmd ) =
@@ -499,7 +512,17 @@ update msg model =
             )
 
         GotoNotes ->
-            fetchNotes model
+            let
+                ( updatedNotesModel, notesCmd ) =
+                    Notes.init model.config model.accessToken model.userId
+                        |> Notes.fetch
+            in
+            ( { model
+                | state = SignedIn ViewingNotes
+                , notesPage = updatedNotesModel
+              }
+            , Cmd.map NotesMsg notesCmd
+            )
 
         GotoSearch ->
             ( { model
@@ -965,7 +988,7 @@ view model =
                         , style "gap" "0.5rem"
                         ]
                         [ gotoButton "Create" GotoCreateNote
-                        , attemptButton "Notes" AttemptFetchNotes
+                        , gotoButton "Notes" GotoNotes
                         , gotoButton "Search" GotoSearch
                         ]
                     , div
@@ -1021,7 +1044,7 @@ view model =
                         ]
 
                     SignedIn ViewingNotes ->
-                        signedInNotesView model.notes
+                        Notes.view GotoEditNote GotoTrashNote model.notesPage
 
                     SignedIn ViewingTrash ->
                         signedInTrashView model.trashedNotes
@@ -1064,13 +1087,6 @@ headerRow =
         ]
         [ h1 [ style "margin" "0" ] [ text "Elm + Supabase + GraphQL" ]
         ]
-
-
-signedInNotesView : List Supabase.Note -> List (Html Msg)
-signedInNotesView notes =
-    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Notes" ]
-    , div [ style "margin-top" "1rem" ] (List.map noteCard notes)
-    ]
 
 
 signedInTrashView : List Supabase.Note -> List (Html Msg)
