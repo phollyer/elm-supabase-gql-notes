@@ -162,7 +162,6 @@ type Msg
     | GotoTrashNote Supabase.Note
     | GotoProfilePage
     | GraphqlNotesLoaded (Result GraphQL.Engine.Error GetActiveNotes.Response)
-    | GraphqlNoteCreated (Result GraphQL.Engine.Error CreateNote.Response)
     | GraphqlNoteDeletedHard (Result GraphQL.Engine.Error DeleteNoteHard.Response)
     | GraphqlNoteDeletedSoft (Result GraphQL.Engine.Error DeleteNoteSoft.Response)
     | GraphqlNoteRestored (Result GraphQL.Engine.Error RestoreNote.Response)
@@ -204,17 +203,6 @@ getNotesToSupabaseNotes =
 getSearchNotesToSupabaseNotes : SearchNotes.Response -> List Supabase.Note
 getSearchNotesToSupabaseNotes =
     flattenSearchNotes >> List.map toSupabaseSearchNote
-
-
-toSupabaseCreatedNote : CreateNote.Records -> Supabase.Note
-toSupabaseCreatedNote { id, title, body, createdAt } =
-    { id = uuidToString id
-    , title = title
-    , body = body
-    , createdAt = datetimeToString createdAt
-    , updatedAt = datetimeToString createdAt
-    , deletedAt = Nothing
-    }
 
 
 toSupabaseUpdateNote : UpdateNote.Records -> Supabase.Note
@@ -678,36 +666,6 @@ update msg model =
                     ( { model | status = Just (Error "Session info missing. Re-checking session...") }
                     , refreshSessionCmd model
                     )
-
-        GraphqlNoteCreated result ->
-            case result of
-                Ok response ->
-                    case response.insertIntoNotesCollection of
-                        Just { records } ->
-                            case records of
-                                record :: _ ->
-                                    ( { model
-                                        | notes = toSupabaseCreatedNote record :: model.notes
-                                        , status = Just (Success "Note created successfully")
-                                        , title = ""
-                                        , titleError = Nothing
-                                        , body = ""
-                                      }
-                                    , Cmd.none
-                                    )
-
-                                [] ->
-                                    ( { model | status = Just (Error "Create mutation returned an empty records list; likely causes: INSERT happened but no row was returned by the GraphQL selection, or RLS limited visible rows") }
-                                    , Cmd.none
-                                    )
-
-                        Nothing ->
-                            ( { model | status = Just (Error "Create mutation returned null for insertIntoNotesCollection; likely causes: mutation field resolved to null due to permissions, schema mismatch, or upstream GraphQL resolver failure") }
-                            , Cmd.none
-                            )
-
-                Err error ->
-                    handleGraphqlFailure "GraphQL note creation failed" error model
 
         GraphqlNoteDeletedHard result ->
             case result of
