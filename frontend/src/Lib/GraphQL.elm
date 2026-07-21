@@ -5,6 +5,7 @@ module Lib.GraphQL exposing
     , handleFailure
     , isAuthError
     , refreshSessionCmd
+    , updateNoteCmd
     )
 
 import Api exposing (Datetime(..), Uuid(..))
@@ -13,6 +14,7 @@ import GraphQL.Engine
 import Http
 import Pages.Shared.Status exposing (Status(..))
 import Ports.Supabase as Supabase
+import UpdateNote.UpdateNote as UpdateNote
 
 
 type alias Config =
@@ -92,6 +94,23 @@ createNoteCmd config accessToken userId graphqlNoteCreated title body =
                 { userId = Uuid userId
                 , title = title
                 , body = body
+                }
+            )
+            { headers = headers config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
+
+
+updateNoteCmd : Config -> String -> (Result GraphQL.Engine.Error UpdateNote.Response -> msg) -> Supabase.Note -> Cmd msg
+updateNoteCmd config accessToken graphqlNoteUpdated note =
+    Cmd.map graphqlNoteUpdated <|
+        Api.mutation
+            (UpdateNote.mutation
+                { id = Uuid note.id
+                , title = note.title
+                , body = note.body
                 }
             )
             { headers = headers config.publishableKey accessToken

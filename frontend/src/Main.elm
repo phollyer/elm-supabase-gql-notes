@@ -18,13 +18,13 @@ import Pages.Auth.MagicLink as MagicLink
 import Pages.Auth.SignIn as SignIn
 import Pages.Auth.SignUp as SignUp
 import Pages.Notes.Create as CreateNote
+import Pages.Notes.Edit as EditNote
 import Pages.Profile as Profile
 import Pages.Shared.Status exposing (Status(..))
 import Ports.Supabase as Supabase
 import RestoreNote.RestoreNote as RestoreNote
 import SearchNotes.SearchNotes as SearchNotes
-import String
-import UI.FormElements exposing (attemptButton, buttons, clearResultsButton, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, searchButton, searchNotesInput)
+import UI.FormElements exposing (attemptButton, buttons, clearResultsButton, gotoButton, gotoStartButton, searchButton, searchNotesInput)
 import UpdateNote.UpdateNote as UpdateNote
 import UpdateProfileAvatar.UpdateProfileAvatar as UpdateProfileAvatar
 
@@ -43,13 +43,11 @@ type alias Model =
     { config : Config
     , accessToken : Maybe String
     , userId : Maybe String
-    , title : String
-    , titleError : Maybe String
-    , body : String
     , magicLinkPage : MagicLink.Model
     , signInPage : SignIn.Model
     , signUpPage : SignUp.Model
     , createNotePage : CreateNote.Model
+    , editNotePage : EditNote.Model
     , profilePage : Profile.Model
     , status : Maybe Status
     , state : State
@@ -83,13 +81,11 @@ init flags =
     ( { config = config
       , accessToken = Nothing
       , userId = Nothing
-      , title = ""
-      , titleError = Nothing
-      , body = ""
       , magicLinkPage = MagicLink.init
       , signInPage = SignIn.init
       , signUpPage = SignUp.init
       , createNotePage = CreateNote.init config Nothing Nothing
+      , editNotePage = EditNote.init config Nothing Nothing
       , profilePage = Profile.init
       , status = Just (Info "Checking session...")
       , state = Start
@@ -136,14 +132,12 @@ type Msg
     | MagicLinkMsg MagicLink.Msg
     | ProfileMsg Profile.Msg
     | CreateNoteMsg CreateNote.Msg
-    | TitleUpdated String
-    | BodyUpdated String
+    | EditNoteMsg EditNote.Msg
     | StartSessionCheck
     | AttemptSignOut
     | AttemptDeleteNoteHard
     | AttemptDeleteNoteSoft
     | AttemptRestoreNote Supabase.Note
-    | AttemptUpdateNote
     | AttemptFetchNotes
     | AttemptFetchTrash
     | AttemptSearchNotes
@@ -165,7 +159,6 @@ type Msg
     | GraphqlNoteDeletedHard (Result GraphQL.Engine.Error DeleteNoteHard.Response)
     | GraphqlNoteDeletedSoft (Result GraphQL.Engine.Error DeleteNoteSoft.Response)
     | GraphqlNoteRestored (Result GraphQL.Engine.Error RestoreNote.Response)
-    | GraphqlNoteUpdated (Result GraphQL.Engine.Error UpdateNote.Response)
     | GraphqlSearchNotesLoaded (Result GraphQL.Engine.Error SearchNotes.Response)
     | GraphqlTrashLoaded (Result GraphQL.Engine.Error GetTrashedNotes.Response)
     | GraphqlAvatarPathUpdated (Result GraphQL.Engine.Error UpdateProfileAvatar.Response)
@@ -286,23 +279,6 @@ softDeleteNoteCmd config accessToken note =
             (DeleteNoteSoft.mutation
                 { id = Uuid note.id
                 , deletedAt = Datetime "1970-01-01T00:00:00Z"
-                }
-            )
-            { headers = graphqlHeaders config.publishableKey accessToken
-            , url = config.graphqlUrl
-            , timeout = Nothing
-            , tracker = Nothing
-            }
-
-
-updateNoteCmd : Config -> String -> Supabase.Note -> Cmd Msg
-updateNoteCmd config accessToken note =
-    Cmd.map GraphqlNoteUpdated <|
-        Api.mutation
-            (UpdateNote.mutation
-                { id = Uuid note.id
-                , title = note.title
-                , body = note.body
                 }
             )
             { headers = graphqlHeaders config.publishableKey accessToken
@@ -450,6 +426,15 @@ update msg model =
             , Cmd.map CreateNoteMsg createNoteCmd
             )
 
+        EditNoteMsg updateNoteMsg ->
+            let
+                ( updatedEditNoteModel, editNoteCmd ) =
+                    EditNote.update updateNoteMsg model.editNotePage
+            in
+            ( { model | editNotePage = updatedEditNoteModel }
+            , Cmd.map EditNoteMsg editNoteCmd
+            )
+
         ProfileMsg profileMsg ->
             let
                 ( updatedProfileModel, profileCmd ) =
@@ -501,11 +486,8 @@ update msg model =
 
         GotoEditNote note ->
             ( { model
-                | title = note.title
-                , body = note.body
-                , currentNote = Just note
-                , status = Nothing
-                , state = SignedIn EditingNote
+                | state = SignedIn EditingNote
+                , editNotePage = EditNote.init model.config model.accessToken (Just note)
               }
             , Cmd.none
             )
@@ -622,26 +604,6 @@ update msg model =
                     ( { model | status = Just (Error "Session info missing. Re-checking session...") }
                     , refreshSessionCmd model
                     )
-
-        AttemptUpdateNote ->
-            if String.isEmpty model.title then
-                ( { model | status = Just (Error "Please fix the errors below") }, Cmd.none )
-
-            else
-                case ( model.accessToken, model.currentNote ) of
-                    ( Just accessToken, Just note ) ->
-                        ( { model | status = Just (Info "Updating note...") }
-                        , updateNoteCmd model.config accessToken <|
-                            { note
-                                | title = model.title
-                                , body = model.body
-                            }
-                        )
-
-                    _ ->
-                        ( { model | status = Just (Error "Session info missing. Re-checking session...") }
-                        , refreshSessionCmd model
-                        )
 
         AttemptSearchNotes ->
             case model.accessToken of
@@ -778,40 +740,6 @@ update msg model =
                 Err error ->
                     handleGraphqlFailure "GraphQL note restoration failed" error model
 
-        GraphqlNoteUpdated result ->
-            case result of
-                Ok response ->
-                    case response.updateNotesCollection.records of
-                        record :: _ ->
-                            let
-                                updatedNote =
-                                    toSupabaseUpdateNote record
-                            in
-                            ( { model
-                                | notes =
-                                    List.map
-                                        (\n ->
-                                            if n.id == updatedNote.id then
-                                                updatedNote
-
-                                            else
-                                                n
-                                        )
-                                        model.notes
-                                , titleError = Nothing
-                                , status = Just (Success "Note updated successfully")
-                              }
-                            , Cmd.none
-                            )
-
-                        [] ->
-                            ( { model | status = Just (Error "Update mutation returned empty records list") }
-                            , Cmd.none
-                            )
-
-                Err error ->
-                    handleGraphqlFailure "GraphQL note update failed" error model
-
         GraphqlNotesLoaded result ->
             case result of
                 Ok response ->
@@ -900,12 +828,6 @@ update msg model =
                 Err error ->
                     handleGraphqlFailure "GraphQL profile load failed" error model
 
-        TitleUpdated value ->
-            ( { model | title = value }, Cmd.none )
-
-        BodyUpdated value ->
-            ( { model | body = value }, Cmd.none )
-
         SupabaseEventReceived payload ->
             case Decode.decodeValue Supabase.decodeEvent payload of
                 Ok event ->
@@ -958,8 +880,6 @@ applyEvent event model =
         Supabase.NoteCreated payload ->
             ( { model
                 | notes = payload.note :: model.notes
-                , title = ""
-                , body = ""
                 , status = Just (Success "Note saved")
               }
             , Cmd.none
@@ -1128,7 +1048,10 @@ view model =
                             model.createNotePage
 
                     SignedIn EditingNote ->
-                        editNoteView ( model.title, model.titleError ) model.body
+                        EditNote.view
+                            (gotoButton "Back to Notes" GotoNotes)
+                            EditNoteMsg
+                            model.editNotePage
 
                     SignedIn (DeleteNote state) ->
                         deleteNoteView state model.currentNote
@@ -1153,22 +1076,6 @@ headerRow =
         ]
         [ h1 [ style "margin" "0" ] [ text "Elm + Supabase + GraphQL" ]
         ]
-
-
-errorView : Maybe String -> Html Msg
-errorView maybeError =
-    case maybeError of
-        Just errorMsg ->
-            div
-                [ style "background-color" "#b91c1c"
-                , style "color" "#ffffff"
-                , style "padding" "0.5rem"
-                , style "border-radius" "0.75rem"
-                ]
-                [ text errorMsg ]
-
-        Nothing ->
-            div [] []
 
 
 signedInNotesView : List Supabase.Note -> List (Html Msg)
@@ -1252,19 +1159,6 @@ trashingNoteView state maybeNote =
 
         Nothing ->
             []
-
-
-editNoteView : ( String, Maybe String ) -> String -> List (Html Msg)
-editNoteView ( title, titleError ) body =
-    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Edit Note" ]
-    , notesTitleInput title TitleUpdated
-    , errorView titleError
-    , notesContentInput body BodyUpdated
-    , buttons
-        [ attemptButton "Update note" AttemptUpdateNote
-        , gotoButton "Back to Notes" GotoNotes
-        ]
-    ]
 
 
 searchNotesView : String -> List Supabase.Note -> List (Html Msg)
