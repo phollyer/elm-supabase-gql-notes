@@ -1,6 +1,7 @@
 module Pages.Shared.Error exposing
     ( Error
     , checkEmail
+    , checkNoteTitle
     , checkPassword
     , checkPasswordConfirm
     , toString
@@ -19,6 +20,7 @@ type FormErrorType
     = EmailError EmailErrorType
     | PasswordError PasswordErrorType
     | PasswordConfirmError PasswordConfirmErrorType
+    | NoteError NoteErrorType
 
 
 type EmailErrorType
@@ -35,6 +37,10 @@ type PasswordErrorType
 type PasswordConfirmErrorType
     = PasswordConfirmIsRequired
     | PasswordConfirmDoesNotMatch
+
+
+type NoteErrorType
+    = TitleIsRequired
 
 
 checkEmail : String -> Maybe Error
@@ -67,6 +73,15 @@ checkPasswordConfirm password passwordConfirm =
         Nothing
 
 
+checkNoteTitle : String -> Maybe Error
+checkNoteTitle title =
+    if String.isEmpty title then
+        Just noteTitleIsRequired
+
+    else
+        Nothing
+
+
 emailIsRequired : Error
 emailIsRequired =
     FormError <|
@@ -93,6 +108,13 @@ passwordsDoNotMatch =
     FormError <|
         PasswordConfirmError <|
             PasswordConfirmDoesNotMatch
+
+
+noteTitleIsRequired : Error
+noteTitleIsRequired =
+    FormError <|
+        NoteError <|
+            TitleIsRequired
 
 
 view : Maybe Error -> Html msg
@@ -130,6 +152,9 @@ formErrorToString formError =
         PasswordConfirmError passwordConfirmErrorType ->
             passwordConfirmErrorToString passwordConfirmErrorType
 
+        NoteError noteErrorType ->
+            noteErrorToString noteErrorType
+
 
 emailErrorToString : EmailErrorType -> String
 emailErrorToString emailErrorType =
@@ -165,3 +190,10 @@ passwordConfirmErrorToString passwordConfirmErrorType =
 
         PasswordConfirmDoesNotMatch ->
             "Passwords do not match"
+
+
+noteErrorToString : NoteErrorType -> String
+noteErrorToString noteErrorType =
+    case noteErrorType of
+        TitleIsRequired ->
+            "A title is required"

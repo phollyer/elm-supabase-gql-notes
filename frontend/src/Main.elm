@@ -1,6 +1,6 @@
 module Main exposing (main)
 
-import Api exposing (Datetime(..), Uuid(..))
+import Api exposing (Datetime(..), Uuid(..), datetimeToString, uuidToString)
 import Browser
 import CreateNote.CreateNote as CreateNote
 import DeleteNoteHard.DeleteNoteHard as DeleteNoteHard
@@ -13,16 +13,18 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Http
 import Json.Decode as Decode
+import Lib.GraphQL as GraphQL
 import Pages.Auth.MagicLink as MagicLink
 import Pages.Auth.SignIn as SignIn
 import Pages.Auth.SignUp as SignUp
+import Pages.Notes.Create as CreateNote
 import Pages.Profile as Profile
-import Pages.Shared.Status as Status exposing (Status(..))
+import Pages.Shared.Status exposing (Status(..))
 import Ports.Supabase as Supabase
 import RestoreNote.RestoreNote as RestoreNote
 import SearchNotes.SearchNotes as SearchNotes
 import String
-import UI.FormElements exposing (attemptButton, buttons, clearResultsButton, emailInput, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, passwordConfirmInput, passwordInput, searchButton, searchNotesInput)
+import UI.FormElements exposing (attemptButton, buttons, clearResultsButton, gotoButton, gotoStartButton, notesContentInput, notesTitleInput, searchButton, searchNotesInput)
 import UpdateNote.UpdateNote as UpdateNote
 import UpdateProfileAvatar.UpdateProfileAvatar as UpdateProfileAvatar
 
@@ -47,6 +49,7 @@ type alias Model =
     , magicLinkPage : MagicLink.Model
     , signInPage : SignIn.Model
     , signUpPage : SignUp.Model
+    , createNotePage : CreateNote.Model
     , profilePage : Profile.Model
     , status : Maybe Status
     , state : State
@@ -59,21 +62,25 @@ type alias Model =
     }
 
 
-type alias Config =
-    { graphqlUrl : String
-    , publishableKey : String
-    }
-
-
 type alias Flags =
     { publishableKey : String
     , graphqlUrl : String
     }
 
 
+type alias Config =
+    GraphQL.Config
+
+
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    ( { config = { graphqlUrl = flags.graphqlUrl, publishableKey = flags.publishableKey }
+    let
+        config =
+            { graphqlUrl = flags.graphqlUrl
+            , publishableKey = flags.publishableKey
+            }
+    in
+    ( { config = config
       , accessToken = Nothing
       , userId = Nothing
       , title = ""
@@ -82,6 +89,7 @@ init flags =
       , magicLinkPage = MagicLink.init
       , signInPage = SignIn.init
       , signUpPage = SignUp.init
+      , createNotePage = CreateNote.init config Nothing Nothing
       , profilePage = Profile.init
       , status = Just (Info "Checking session...")
       , state = Start
@@ -123,15 +131,15 @@ type DeleteState
 
 
 type Msg
-    = ProfileMsg Profile.Msg
-    | SignInMsg SignIn.Msg
+    = SignInMsg SignIn.Msg
     | SignUpMsg SignUp.Msg
     | MagicLinkMsg MagicLink.Msg
+    | ProfileMsg Profile.Msg
+    | CreateNoteMsg CreateNote.Msg
     | TitleUpdated String
     | BodyUpdated String
     | StartSessionCheck
     | AttemptSignOut
-    | AttemptCreateNote
     | AttemptDeleteNoteHard
     | AttemptDeleteNoteSoft
     | AttemptRestoreNote Supabase.Note
@@ -171,16 +179,6 @@ graphqlHeaders publishableKey accessToken =
     [ Http.header "apiKey" publishableKey
     , Http.header "Authorization" ("Bearer " ++ accessToken)
     ]
-
-
-uuidToString : Uuid -> String
-uuidToString (Uuid uuidStr) =
-    uuidStr
-
-
-datetimeToString : Datetime -> String
-datetimeToString (Datetime datetime) =
-    datetime
 
 
 nextRequestId : Model -> String
@@ -261,23 +259,6 @@ toSupabaseSearchNote { id, title, body, createdAt, updatedAt, deletedAt } =
     , updatedAt = datetimeToString updatedAt
     , deletedAt = Maybe.map datetimeToString deletedAt
     }
-
-
-createNoteCmd : Config -> String -> String -> String -> String -> Cmd Msg
-createNoteCmd config accessToken userId title body =
-    Cmd.map GraphqlNoteCreated <|
-        Api.mutation
-            (CreateNote.mutation
-                { userId = Uuid userId
-                , title = title
-                , body = body
-                }
-            )
-            { headers = graphqlHeaders config.publishableKey accessToken
-            , url = config.graphqlUrl
-            , timeout = Nothing
-            , tracker = Nothing
-            }
 
 
 restoreNoteCmd : Config -> String -> Supabase.Note -> Cmd Msg
@@ -472,6 +453,15 @@ update msg model =
             , Cmd.map MagicLinkMsg magicLinkCmd
             )
 
+        CreateNoteMsg createNoteMsg ->
+            let
+                ( updatedCreateNoteModel, createNoteCmd ) =
+                    CreateNote.update createNoteMsg model.createNotePage
+            in
+            ( { model | createNotePage = updatedCreateNoteModel }
+            , Cmd.map CreateNoteMsg createNoteCmd
+            )
+
         ProfileMsg profileMsg ->
             let
                 ( updatedProfileModel, profileCmd ) =
@@ -515,11 +505,8 @@ update msg model =
 
         GotoCreateNote ->
             ( { model
-                | title = ""
-                , body = ""
-                , currentNote = Nothing
-                , status = Nothing
-                , state = SignedIn CreatingNote
+                | state = SignedIn CreatingNote
+                , createNotePage = CreateNote.init model.config model.accessToken model.userId
               }
             , Cmd.none
             )
@@ -602,27 +589,6 @@ update msg model =
                     ( { model | status = Just (Error "No access token. Re-checking session...") }
                     , refreshSessionCmd model
                     )
-
-        AttemptCreateNote ->
-            if String.isEmpty model.title then
-                ( { model
-                    | status = Just (Error "Please fix the errors below")
-                    , titleError = Just "Title is required"
-                  }
-                , Cmd.none
-                )
-
-            else
-                case ( model.accessToken, model.userId ) of
-                    ( Just accessToken, Just userId ) ->
-                        ( { model | status = Just (Info "Creating note...") }
-                        , createNoteCmd model.config accessToken userId model.title model.body
-                        )
-
-                    _ ->
-                        ( { model | status = Just (Error "Session info missing. Re-checking session...") }
-                        , refreshSessionCmd model
-                        )
 
         AttemptDeleteNoteHard ->
             case ( model.accessToken, model.currentNote ) of
@@ -1198,7 +1164,10 @@ view model =
                         searchNotesView model.searchQuery model.searchResults
 
                     SignedIn CreatingNote ->
-                        createNoteView ( model.title, model.titleError ) model.body
+                        CreateNote.view
+                            (gotoButton "Back to Notes" GotoNotes)
+                            CreateNoteMsg
+                            model.createNotePage
 
                     SignedIn EditingNote ->
                         editNoteView ( model.title, model.titleError ) model.body
@@ -1242,19 +1211,6 @@ errorView maybeError =
 
         Nothing ->
             div [] []
-
-
-createNoteView : ( String, Maybe String ) -> String -> List (Html Msg)
-createNoteView ( title, titleError ) body =
-    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Create Note" ]
-    , notesTitleInput title TitleUpdated
-    , errorView titleError
-    , notesContentInput body BodyUpdated
-    , buttons
-        [ attemptButton "Create note" AttemptCreateNote
-        , gotoButton "Back to Notes" GotoNotes
-        ]
-    ]
 
 
 signedInNotesView : List Supabase.Note -> List (Html Msg)
