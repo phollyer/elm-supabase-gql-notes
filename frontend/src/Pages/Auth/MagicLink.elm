@@ -20,7 +20,7 @@ init : Model
 init =
     { email = ""
     , emailError = Nothing
-    , status = Nothing
+    , status = Just (Info "Use the magic link to sign in via email")
     , requestId = 0
     }
 

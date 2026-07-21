@@ -518,10 +518,8 @@ update msg model =
 
         GotoMagicLink ->
             ( { model
-                | status = Just (Info "Use the magic link to sign in via email")
-                , state = MagicLink
-                , email = ""
-                , emailError = Nothing
+                | state = MagicLink
+                , magicLinkPage = MagicLink.init
               }
             , Cmd.none
             )
