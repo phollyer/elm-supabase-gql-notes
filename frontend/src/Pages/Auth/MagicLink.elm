@@ -37,30 +37,31 @@ update msg model =
             ( { model | email = value }, Cmd.none )
 
         AttemptMagicLinkSignIn ->
-            if String.isEmpty model.email then
-                ( { model
-                    | status = Just (Status.Error "Please fix the errors below")
-                    , emailError = Just Error.emailIsRequired
-                  }
-                , Cmd.none
-                )
-
-            else
-                let
-                    newRequestId =
-                        model.requestId + 1
-                in
-                ( { model
-                    | status = Just (Status.Info "Sending magic link...")
-                    , requestId = newRequestId
-                  }
-                , Supabase.sendCommand
-                    (Supabase.SignInWithMagicLink
-                        { requestId = "magic-link-sign-in-" ++ String.fromInt newRequestId
-                        , email = model.email
-                        }
+            case Error.checkEmail model.email of
+                Just emailError ->
+                    ( { model
+                        | status = Just (Status.Error "Please fix the errors below")
+                        , emailError = Just emailError
+                      }
+                    , Cmd.none
                     )
-                )
+
+                Nothing ->
+                    let
+                        newRequestId =
+                            model.requestId + 1
+                    in
+                    ( { model
+                        | status = Just (Status.Info "Sending magic link...")
+                        , requestId = newRequestId
+                      }
+                    , Supabase.sendCommand
+                        (Supabase.SignInWithMagicLink
+                            { requestId = "magic-link-sign-in-" ++ String.fromInt newRequestId
+                            , email = model.email
+                            }
+                        )
+                    )
 
 
 view : Html msg -> (Msg -> msg) -> Model -> List (Html msg)

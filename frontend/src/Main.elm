@@ -14,6 +14,7 @@ import Html.Attributes exposing (..)
 import Http
 import Json.Decode as Decode
 import Pages.Auth.MagicLink as MagicLink
+import Pages.Auth.SignIn as SignIn
 import Pages.Profile as Profile
 import Pages.Shared.Status as Status exposing (Status(..))
 import Ports.Supabase as Supabase
@@ -48,7 +49,8 @@ type alias Model =
     , title : String
     , titleError : Maybe String
     , body : String
-    , magicLink : MagicLink.Model
+    , magicLinkPage : MagicLink.Model
+    , signInPage : SignIn.Model
     , profilePage : Profile.Model
     , status : Maybe Status
     , state : State
@@ -87,7 +89,8 @@ init flags =
       , title = ""
       , titleError = Nothing
       , body = ""
-      , magicLink = MagicLink.init
+      , magicLinkPage = MagicLink.init
+      , signInPage = SignIn.init
       , profilePage = Profile.init
       , status = Just (Info "Checking session...")
       , state = Start
@@ -130,6 +133,7 @@ type DeleteState
 
 type Msg
     = ProfileMsg Profile.Msg
+    | SignInMsg SignIn.Msg
     | MagicLinkMsg MagicLink.Msg
     | EmailUpdated String
     | PasswordUpdated String
@@ -455,12 +459,21 @@ update msg model =
             , refreshSessionCmd model
             )
 
+        SignInMsg signInMsg ->
+            let
+                ( updatedSignInModel, signInCmd ) =
+                    SignIn.update signInMsg model.signInPage
+            in
+            ( { model | signInPage = updatedSignInModel }
+            , Cmd.map SignInMsg signInCmd
+            )
+
         MagicLinkMsg magicLinkMsg ->
             let
                 ( updatedMagicLinkModel, magicLinkCmd ) =
-                    MagicLink.update magicLinkMsg model.magicLink
+                    MagicLink.update magicLinkMsg model.magicLinkPage
             in
-            ( { model | magicLink = updatedMagicLinkModel }
+            ( { model | magicLinkPage = updatedMagicLinkModel }
             , Cmd.map MagicLinkMsg magicLinkCmd
             )
 
@@ -497,12 +510,8 @@ update msg model =
 
         GotoSignIn ->
             ( { model
-                | status = Nothing
-                , state = SignIn
-                , email = ""
-                , emailError = Nothing
-                , password = ""
-                , passwordError = Nothing
+                | state = SignIn
+                , signInPage = SignIn.init
               }
             , Cmd.none
             )
@@ -1264,7 +1273,8 @@ view model =
 
             _ ->
                 div [] []
-         , Status.view model.status
+
+         --, Status.view model.status
          ]
             ++ (case model.state of
                     Start ->
@@ -1282,13 +1292,16 @@ view model =
                             ( model.passwordConfirm, model.passwordConfirmError )
 
                     SignIn ->
-                        signInView model.email model.password
+                        SignIn.view
+                            (gotoStartButton GotoStart)
+                            SignInMsg
+                            model.signInPage
 
                     MagicLink ->
                         MagicLink.view
                             (gotoStartButton GotoStart)
                             MagicLinkMsg
-                            model.magicLink
+                            model.magicLinkPage
 
                     SignedIn ViewReady ->
                         [ h1 [] [ text "Welcome!" ]
@@ -1369,17 +1382,6 @@ errorView maybeError =
 
         Nothing ->
             div [] []
-
-
-signInView : String -> String -> List (Html Msg)
-signInView email password =
-    [ emailInput email EmailUpdated
-    , passwordInput password PasswordUpdated
-    , buttons
-        [ gotoStartButton GotoStart
-        , attemptButton "Sign in" AttemptPasswordSignIn
-        ]
-    ]
 
 
 createNoteView : ( String, Maybe String ) -> String -> List (Html Msg)
