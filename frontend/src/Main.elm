@@ -38,13 +38,7 @@ main =
 
 
 type alias Model =
-    { email : String
-    , emailError : Maybe String
-    , password : String
-    , passwordError : Maybe String
-    , passwordConfirm : String
-    , passwordConfirmError : Maybe String
-    , config : Config
+    { config : Config
     , accessToken : Maybe String
     , userId : Maybe String
     , title : String
@@ -79,13 +73,7 @@ type alias Flags =
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    ( { email = ""
-      , emailError = Nothing
-      , password = ""
-      , passwordError = Nothing
-      , passwordConfirm = ""
-      , passwordConfirmError = Nothing
-      , config = { graphqlUrl = flags.graphqlUrl, publishableKey = flags.publishableKey }
+    ( { config = { graphqlUrl = flags.graphqlUrl, publishableKey = flags.publishableKey }
       , accessToken = Nothing
       , userId = Nothing
       , title = ""
@@ -139,15 +127,9 @@ type Msg
     | SignInMsg SignIn.Msg
     | SignUpMsg SignUp.Msg
     | MagicLinkMsg MagicLink.Msg
-    | EmailUpdated String
-    | PasswordUpdated String
-    | PasswordConfirmUpdated String
     | TitleUpdated String
     | BodyUpdated String
     | StartSessionCheck
-    | AttemptPasswordSignIn
-    | AttemptPasswordSignUp
-    | AttemptMagicLinkSignIn
     | AttemptSignOut
     | AttemptCreateNote
     | AttemptDeleteNoteHard
@@ -509,14 +491,8 @@ update msg model =
 
         GotoSignUp ->
             ( { model
-                | status = Nothing
-                , state = SignUp
-                , email = ""
-                , password = ""
-                , passwordConfirm = ""
-                , emailError = Nothing
-                , passwordError = Nothing
-                , passwordConfirmError = Nothing
+                | state = SignUp
+                , signUpPage = SignUp.init
               }
             , Cmd.none
             )
@@ -606,116 +582,6 @@ update msg model =
 
         ClearResults ->
             ( { model | searchResults = [] }, Cmd.none )
-
-        EmailUpdated value ->
-            ( { model | email = value }, Cmd.none )
-
-        PasswordUpdated value ->
-            ( { model | password = value }, Cmd.none )
-
-        PasswordConfirmUpdated value ->
-            ( { model | passwordConfirm = value }, Cmd.none )
-
-        AttemptPasswordSignUp ->
-            let
-                emailError =
-                    if String.isEmpty model.email then
-                        Just "Email is required"
-
-                    else
-                        Nothing
-
-                passwordError =
-                    if String.isEmpty model.password then
-                        Just "Password is required"
-
-                    else
-                        Nothing
-
-                passwordConfirmError =
-                    if model.password /= model.passwordConfirm then
-                        Just "Passwords do not match"
-
-                    else
-                        Nothing
-
-                newModel =
-                    { model
-                        | emailError = emailError
-                        , passwordError = passwordError
-                        , passwordConfirmError = passwordConfirmError
-                    }
-            in
-            case ( emailError, passwordError, passwordConfirmError ) of
-                ( Nothing, Nothing, Nothing ) ->
-                    ( { newModel | status = Nothing }
-                    , Supabase.sendCommand
-                        (Supabase.SignUpWithPassword
-                            { requestId = nextRequestId model
-                            , email = model.email
-                            , password = model.password
-                            }
-                        )
-                    )
-
-                _ ->
-                    ( { newModel | status = Just (Error "Please fix the errors below") }, Cmd.none )
-
-        AttemptPasswordSignIn ->
-            if String.isEmpty model.email && String.isEmpty model.password then
-                ( { model
-                    | status = Just (Error "Please fix the errors below")
-                    , emailError = Just "Email is required"
-                    , passwordError = Just "Password is required"
-                  }
-                , Cmd.none
-                )
-
-            else if String.isEmpty model.email then
-                ( { model
-                    | status = Just (Error "Please fix the errors below")
-                    , emailError = Just "Email is required"
-                  }
-                , Cmd.none
-                )
-
-            else if String.isEmpty model.password then
-                ( { model
-                    | status = Just (Error "Please fix the errors below")
-                    , passwordError = Just "Password is required"
-                  }
-                , Cmd.none
-                )
-
-            else
-                ( { model | status = Just (Info "Signing in...") }
-                , Supabase.sendCommand
-                    (Supabase.SignInWithPassword
-                        { requestId = nextRequestId model
-                        , email = model.email
-                        , password = model.password
-                        }
-                    )
-                )
-
-        AttemptMagicLinkSignIn ->
-            if String.isEmpty model.email then
-                ( { model
-                    | status = Just (Error "Please fix the errors below")
-                    , emailError = Just "Email is required"
-                  }
-                , Cmd.none
-                )
-
-            else
-                ( { model | status = Just (Info "Sending magic link...") }
-                , Supabase.sendCommand
-                    (Supabase.SignInWithMagicLink
-                        { requestId = nextRequestId model
-                        , email = model.email
-                        }
-                    )
-                )
 
         AttemptSignOut ->
             ( { model | status = Just (Info "Signing out...") }
@@ -1134,7 +1000,6 @@ applyEvent event model =
                 , userId = Just payload.userId
                 , state = SignedIn ViewReady
                 , status = Nothing
-                , email = payload.email
               }
             , Cmd.none
             )
