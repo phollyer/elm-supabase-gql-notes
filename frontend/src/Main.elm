@@ -15,6 +15,7 @@ import Http
 import Json.Decode as Decode
 import Pages.Auth.MagicLink as MagicLink
 import Pages.Auth.SignIn as SignIn
+import Pages.Auth.SignUp as SignUp
 import Pages.Profile as Profile
 import Pages.Shared.Status as Status exposing (Status(..))
 import Ports.Supabase as Supabase
@@ -51,6 +52,7 @@ type alias Model =
     , body : String
     , magicLinkPage : MagicLink.Model
     , signInPage : SignIn.Model
+    , signUpPage : SignUp.Model
     , profilePage : Profile.Model
     , status : Maybe Status
     , state : State
@@ -91,6 +93,7 @@ init flags =
       , body = ""
       , magicLinkPage = MagicLink.init
       , signInPage = SignIn.init
+      , signUpPage = SignUp.init
       , profilePage = Profile.init
       , status = Just (Info "Checking session...")
       , state = Start
@@ -134,6 +137,7 @@ type DeleteState
 type Msg
     = ProfileMsg Profile.Msg
     | SignInMsg SignIn.Msg
+    | SignUpMsg SignUp.Msg
     | MagicLinkMsg MagicLink.Msg
     | EmailUpdated String
     | PasswordUpdated String
@@ -457,6 +461,15 @@ update msg model =
         StartSessionCheck ->
             ( { model | status = Just (Info "Checking session...") }
             , refreshSessionCmd model
+            )
+
+        SignUpMsg signUpMsg ->
+            let
+                ( updatedSignUpModel, signUpCmd ) =
+                    SignUp.update signUpMsg model.signUpPage
+            in
+            ( { model | signUpPage = updatedSignUpModel }
+            , Cmd.map SignUpMsg signUpCmd
             )
 
         SignInMsg signInMsg ->
@@ -1284,10 +1297,10 @@ view model =
                         ]
 
                     SignUp ->
-                        signUpView
-                            ( model.email, model.emailError )
-                            ( model.password, model.passwordError )
-                            ( model.passwordConfirm, model.passwordConfirmError )
+                        SignUp.view
+                            (gotoStartButton GotoStart)
+                            SignUpMsg
+                            model.signUpPage
 
                     SignIn ->
                         SignIn.view
@@ -1348,22 +1361,6 @@ headerRow =
         ]
         [ h1 [ style "margin" "0" ] [ text "Elm + Supabase + GraphQL" ]
         ]
-
-
-signUpView : ( String, Maybe String ) -> ( String, Maybe String ) -> ( String, Maybe String ) -> List (Html Msg)
-signUpView ( email, emailError ) ( password, passwordError ) ( passwordConfirm, passwordConfirmError ) =
-    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Sign Up" ]
-    , emailInput email EmailUpdated
-    , errorView emailError
-    , passwordInput password PasswordUpdated
-    , errorView passwordError
-    , passwordConfirmInput passwordConfirm PasswordConfirmUpdated
-    , errorView passwordConfirmError
-    , buttons
-        [ gotoStartButton GotoStart
-        , attemptButton "Sign up" AttemptPasswordSignUp
-        ]
-    ]
 
 
 errorView : Maybe String -> Html Msg

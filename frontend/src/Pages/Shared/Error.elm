@@ -2,6 +2,7 @@ module Pages.Shared.Error exposing
     ( Error
     , checkEmail
     , checkPassword
+    , checkPasswordConfirm
     , toString
     , view
     )
@@ -17,6 +18,7 @@ type Error
 type FormErrorType
     = EmailError EmailErrorType
     | PasswordError PasswordErrorType
+    | PasswordConfirmError PasswordConfirmErrorType
 
 
 type EmailErrorType
@@ -28,6 +30,11 @@ type PasswordErrorType
     = PasswordIsRequired
     | PasswordIsTooShort
     | PasswordIsTooWeak
+
+
+type PasswordConfirmErrorType
+    = PasswordConfirmIsRequired
+    | PasswordConfirmDoesNotMatch
 
 
 checkEmail : String -> Maybe Error
@@ -48,6 +55,18 @@ checkPassword password =
         Nothing
 
 
+checkPasswordConfirm : String -> String -> Maybe Error
+checkPasswordConfirm password passwordConfirm =
+    if String.isEmpty passwordConfirm then
+        Just passwordConfirmIsRequired
+
+    else if password /= passwordConfirm then
+        Just passwordsDoNotMatch
+
+    else
+        Nothing
+
+
 emailIsRequired : Error
 emailIsRequired =
     FormError <|
@@ -60,6 +79,20 @@ passwordIsRequired =
     FormError <|
         PasswordError <|
             PasswordIsRequired
+
+
+passwordConfirmIsRequired : Error
+passwordConfirmIsRequired =
+    FormError <|
+        PasswordConfirmError <|
+            PasswordConfirmIsRequired
+
+
+passwordsDoNotMatch : Error
+passwordsDoNotMatch =
+    FormError <|
+        PasswordConfirmError <|
+            PasswordConfirmDoesNotMatch
 
 
 view : Maybe Error -> Html msg
@@ -94,6 +127,9 @@ formErrorToString formError =
         PasswordError passwordErrorType ->
             passwordErrorToString passwordErrorType
 
+        PasswordConfirmError passwordConfirmErrorType ->
+            passwordConfirmErrorToString passwordConfirmErrorType
+
 
 emailErrorToString : EmailErrorType -> String
 emailErrorToString emailErrorType =
@@ -119,3 +155,13 @@ passwordErrorToString passwordErrorType =
         PasswordIsTooWeak ->
             -- TODO: Add password strength validation
             "The password is too weak"
+
+
+passwordConfirmErrorToString : PasswordConfirmErrorType -> String
+passwordConfirmErrorToString passwordConfirmErrorType =
+    case passwordConfirmErrorType of
+        PasswordConfirmIsRequired ->
+            "Password confirmation is required"
+
+        PasswordConfirmDoesNotMatch ->
+            "Passwords do not match"
