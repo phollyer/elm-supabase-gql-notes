@@ -141,7 +141,6 @@ type Msg
     | AttemptDeleteNoteHard
     | AttemptDeleteNoteSoft
     | AttemptRestoreNote Supabase.Note
-    | AttemptFetchNotes
     | AttemptFetchTrash
     | AttemptFetchProfile
     | GotoStart
@@ -255,17 +254,6 @@ softDeleteNoteCmd config accessToken note =
             }
 
 
-fetchNotesCmd : Config -> String -> Cmd Msg
-fetchNotesCmd config accessToken =
-    Cmd.map GraphqlNotesLoaded <|
-        Api.query GetActiveNotes.query
-            { headers = graphqlHeaders config.publishableKey accessToken
-            , url = config.graphqlUrl
-            , timeout = Nothing
-            , tracker = Nothing
-            }
-
-
 fetchTrashCmd : Config -> String -> Cmd Msg
 fetchTrashCmd config accessToken =
     Cmd.map GraphqlTrashLoaded <|
@@ -310,24 +298,6 @@ updateProfileAvatarPathCmd config accessToken userId avatarPath =
 refreshSessionCmd : Model -> Cmd Msg
 refreshSessionCmd model =
     Supabase.sendCommand (Supabase.RefreshSession { requestId = nextRequestId model })
-
-
-fetchNotes : Model -> ( Model, Cmd Msg )
-fetchNotes model =
-    case model.accessToken of
-        Just accessToken ->
-            ( { model
-                | state = SignedIn ViewingNotes
-                , status = Just (Info "Loading notes...")
-                , notes = []
-              }
-            , fetchNotesCmd model.config accessToken
-            )
-
-        Nothing ->
-            ( { model | status = Just (Error "No access token. Re-checking session...") }
-            , refreshSessionCmd model
-            )
 
 
 subscriptions : Model -> Sub Msg
@@ -519,9 +489,6 @@ update msg model =
             ( { model | status = Just (Info "Signing out...") }
             , Supabase.sendCommand (Supabase.SignOut { requestId = nextRequestId model })
             )
-
-        AttemptFetchNotes ->
-            fetchNotes model
 
         AttemptFetchTrash ->
             case model.accessToken of
