@@ -1,8 +1,7 @@
 module Pages.Notes.Create exposing
     ( Model
-    , Msg(..)
+    , Msg
     , init
-    , toSupabaseCreatedNote
     , update
     , view
     )

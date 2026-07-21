@@ -1,4 +1,10 @@
-module Pages.Notes.Edit exposing (..)
+module Pages.Notes.Edit exposing
+    ( Model
+    , Msg
+    , init
+    , update
+    , view
+    )
 
 import Api
 import GraphQL.Engine
