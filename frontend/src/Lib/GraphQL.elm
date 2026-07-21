@@ -6,6 +6,7 @@ module Lib.GraphQL exposing
     , handleFailure
     , isAuthError
     , refreshSessionCmd
+    , searchNotesCmd
     , updateNoteCmd
     )
 
@@ -16,6 +17,7 @@ import GraphQL.Engine
 import Http
 import Pages.Shared.Status exposing (Status(..))
 import Ports.Supabase as Supabase
+import SearchNotes.SearchNotes as SearchNotes
 import UpdateNote.UpdateNote as UpdateNote
 
 
@@ -125,6 +127,20 @@ updateNoteCmd config accessToken graphqlNoteUpdated note =
                 , title = note.title
                 , body = note.body
                 }
+            )
+            { headers = headers config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
+
+
+searchNotesCmd : Config -> String -> (Result GraphQL.Engine.Error SearchNotes.Response -> msg) -> String -> Cmd msg
+searchNotesCmd config accessToken graphqlSearchNotesLoaded query =
+    Cmd.map graphqlSearchNotesLoaded <|
+        Api.query
+            (SearchNotes.query
+                { query = "%" ++ query ++ "%" }
             )
             { headers = headers config.publishableKey accessToken
             , url = config.graphqlUrl

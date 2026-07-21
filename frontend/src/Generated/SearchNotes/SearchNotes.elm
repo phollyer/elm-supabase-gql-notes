@@ -120,7 +120,7 @@ toPayload_ : Int -> String
 toPayload_ version_ =
     ((((GraphQL.Engine.versionedAlias
             version_
-            "notesCollection" ++ " (filter: {or: [{title: {ilike: "
+            "notesCollection" ++ " (filter: {deletedAt: {is: NULL}, or: [{title: {ilike: "
        ) ++ GraphQL.Engine.versionedName version_ "$query"
       ) ++ "}}, {body: {ilike: "
      ) ++ GraphQL.Engine.versionedName version_ "$query"

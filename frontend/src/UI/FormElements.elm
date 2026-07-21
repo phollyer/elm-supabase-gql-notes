@@ -63,7 +63,7 @@ clearResultsButton : msg -> Html msg
 clearResultsButton onClickMsg =
     button
         [ onClick onClickMsg, style "margin-right" "0.5rem" ]
-        [ text "Clear Results" ]
+        [ text "Clear" ]
 
 
 uploadButton : String -> msg -> Html msg

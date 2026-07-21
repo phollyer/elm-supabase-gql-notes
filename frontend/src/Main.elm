@@ -20,12 +20,13 @@ import Pages.Auth.SignUp as SignUp
 import Pages.Notes.Create as CreateNote
 import Pages.Notes.Edit as EditNote
 import Pages.Notes.Notes as Notes
+import Pages.Notes.Search as SearchNotes
 import Pages.Profile as Profile
 import Pages.Shared.Status exposing (Status(..))
 import Ports.Supabase as Supabase
 import RestoreNote.RestoreNote as RestoreNote
 import SearchNotes.SearchNotes as SearchNotes
-import UI.FormElements exposing (attemptButton, buttons, clearResultsButton, gotoButton, gotoStartButton, searchButton, searchNotesInput)
+import UI.FormElements exposing (attemptButton, buttons, gotoButton, gotoStartButton)
 import UpdateProfileAvatar.UpdateProfileAvatar as UpdateProfileAvatar
 
 
@@ -49,14 +50,13 @@ type alias Model =
     , createNotePage : CreateNote.Model
     , editNotePage : EditNote.Model
     , notesPage : Notes.Model
+    , searchNotesPage : SearchNotes.Model
     , profilePage : Profile.Model
     , status : Maybe Status
     , state : State
     , currentNote : Maybe Supabase.Note
     , notes : List Supabase.Note
     , trashedNotes : List Supabase.Note
-    , searchQuery : String
-    , searchResults : List Supabase.Note
     , nextId : Int
     }
 
@@ -88,14 +88,13 @@ init flags =
       , createNotePage = CreateNote.init config Nothing Nothing
       , editNotePage = EditNote.init config Nothing Nothing
       , notesPage = Notes.init config Nothing Nothing
+      , searchNotesPage = SearchNotes.init config Nothing Nothing
       , profilePage = Profile.init
       , status = Just (Info "Checking session...")
       , state = Start
       , currentNote = Nothing
       , notes = []
       , trashedNotes = []
-      , searchQuery = ""
-      , searchResults = []
       , nextId = 1
       }
     , Supabase.sendCommand (Supabase.InitializeSession { requestId = "init-0" })
@@ -135,6 +134,7 @@ type Msg
     | ProfileMsg Profile.Msg
     | CreateNoteMsg CreateNote.Msg
     | EditNoteMsg EditNote.Msg
+    | SearchNotesMsg SearchNotes.Msg
     | NotesMsg Notes.Msg
     | StartSessionCheck
     | AttemptSignOut
@@ -143,10 +143,7 @@ type Msg
     | AttemptRestoreNote Supabase.Note
     | AttemptFetchNotes
     | AttemptFetchTrash
-    | AttemptSearchNotes
     | AttemptFetchProfile
-    | SearchQueryUpdated String
-    | ClearResults
     | GotoStart
     | GotoSignUp
     | GotoSignIn
@@ -162,7 +159,6 @@ type Msg
     | GraphqlNoteDeletedHard (Result GraphQL.Engine.Error DeleteNoteHard.Response)
     | GraphqlNoteDeletedSoft (Result GraphQL.Engine.Error DeleteNoteSoft.Response)
     | GraphqlNoteRestored (Result GraphQL.Engine.Error RestoreNote.Response)
-    | GraphqlSearchNotesLoaded (Result GraphQL.Engine.Error SearchNotes.Response)
     | GraphqlTrashLoaded (Result GraphQL.Engine.Error GetTrashedNotes.Response)
     | GraphqlAvatarPathUpdated (Result GraphQL.Engine.Error UpdateProfileAvatar.Response)
     | GraphqlProfileLoaded (Result GraphQL.Engine.Error GetProfile.Response)
@@ -186,19 +182,9 @@ flattenGetNotes response =
     List.map .node response.notesCollection.edges
 
 
-flattenSearchNotes : SearchNotes.Response -> List SearchNotes.Node
-flattenSearchNotes response =
-    List.map .node response.notesCollection.edges
-
-
 getNotesToSupabaseNotes : GetActiveNotes.Response -> List Supabase.Note
 getNotesToSupabaseNotes =
     flattenGetNotes >> List.map toSupabaseNote
-
-
-getSearchNotesToSupabaseNotes : SearchNotes.Response -> List Supabase.Note
-getSearchNotesToSupabaseNotes =
-    flattenSearchNotes >> List.map toSupabaseSearchNote
 
 
 toSupabaseDeleteNoteSoft : DeleteNoteSoft.Records -> Supabase.Note
@@ -214,17 +200,6 @@ toSupabaseDeleteNoteSoft { id, title, body, createdAt, updatedAt, deletedAt } =
 
 toSupabaseNote : GetActiveNotes.Node -> Supabase.Note
 toSupabaseNote { id, title, body, createdAt, updatedAt, deletedAt } =
-    { id = uuidToString id
-    , title = title
-    , body = body
-    , createdAt = datetimeToString createdAt
-    , updatedAt = datetimeToString updatedAt
-    , deletedAt = Maybe.map datetimeToString deletedAt
-    }
-
-
-toSupabaseSearchNote : SearchNotes.Node -> Supabase.Note
-toSupabaseSearchNote { id, title, body, createdAt, updatedAt, deletedAt } =
     { id = uuidToString id
     , title = title
     , body = body
@@ -295,20 +270,6 @@ fetchTrashCmd : Config -> String -> Cmd Msg
 fetchTrashCmd config accessToken =
     Cmd.map GraphqlTrashLoaded <|
         Api.query GetTrashedNotes.query
-            { headers = graphqlHeaders config.publishableKey accessToken
-            , url = config.graphqlUrl
-            , timeout = Nothing
-            , tracker = Nothing
-            }
-
-
-searchNotesCmd : Config -> String -> String -> Cmd Msg
-searchNotesCmd config accessToken query =
-    Cmd.map GraphqlSearchNotesLoaded <|
-        Api.query
-            (SearchNotes.query
-                { query = "%" ++ query ++ "%" }
-            )
             { headers = graphqlHeaders config.publishableKey accessToken
             , url = config.graphqlUrl
             , timeout = Nothing
@@ -427,6 +388,15 @@ update msg model =
             , Cmd.map EditNoteMsg editNoteCmd
             )
 
+        SearchNotesMsg searchNotesMsg ->
+            let
+                ( updatedSearchNotesModel, searchNotesCmd ) =
+                    SearchNotes.update searchNotesMsg model.searchNotesPage
+            in
+            ( { model | searchNotesPage = updatedSearchNotesModel }
+            , Cmd.map SearchNotesMsg searchNotesCmd
+            )
+
         NotesMsg notesMsg ->
             let
                 ( updatedNotesModel, notesCmd ) =
@@ -526,8 +496,8 @@ update msg model =
 
         GotoSearch ->
             ( { model
-                | status = Nothing
-                , state = SignedIn SearchingNotes
+                | state = SignedIn SearchingNotes
+                , searchNotesPage = SearchNotes.init model.config model.accessToken model.userId
               }
             , Cmd.none
             )
@@ -544,12 +514,6 @@ update msg model =
                 _ ->
                     Cmd.none
             )
-
-        SearchQueryUpdated value ->
-            ( { model | searchQuery = value }, Cmd.none )
-
-        ClearResults ->
-            ( { model | searchResults = [] }, Cmd.none )
 
         AttemptSignOut ->
             ( { model | status = Just (Info "Signing out...") }
@@ -613,18 +577,6 @@ update msg model =
 
                 Nothing ->
                     ( { model | status = Just (Error "Session info missing. Re-checking session...") }
-                    , refreshSessionCmd model
-                    )
-
-        AttemptSearchNotes ->
-            case model.accessToken of
-                Just accessToken ->
-                    ( { model | status = Just (Info "Searching notes...") }
-                    , searchNotesCmd model.config accessToken model.searchQuery
-                    )
-
-                Nothing ->
-                    ( { model | status = Just (Error "No access token. Re-checking session...") }
                     , refreshSessionCmd model
                     )
 
@@ -765,19 +717,6 @@ update msg model =
                 Err error ->
                     handleGraphqlFailure "GraphQL notes load failed" error model
 
-        GraphqlSearchNotesLoaded result ->
-            case result of
-                Ok response ->
-                    ( { model
-                        | searchResults = getSearchNotesToSupabaseNotes response
-                        , status = Just (Success "Search completed")
-                      }
-                    , Cmd.none
-                    )
-
-                Err error ->
-                    handleGraphqlFailure "GraphQL search failed" error model
-
         GraphqlAvatarPathUpdated result ->
             case result of
                 Ok response ->
@@ -880,19 +819,16 @@ applyEvent event model =
             , Cmd.none
             )
 
-        Supabase.NotesFound payload ->
-            ( { model
-                | searchResults = payload.notes
-                , status = Just (Success "Notes found")
-              }
-            , Cmd.none
-            )
-
         Supabase.NoteCreated payload ->
             ( { model
                 | notes = payload.note :: model.notes
                 , status = Just (Success "Note saved")
               }
+            , Cmd.none
+            )
+
+        Supabase.NotesFound _ ->
+            ( { model | status = Just (Success "Notes found") }
             , Cmd.none
             )
 
@@ -1050,7 +986,12 @@ view model =
                         signedInTrashView model.trashedNotes
 
                     SignedIn SearchingNotes ->
-                        searchNotesView model.searchQuery model.searchResults
+                        SearchNotes.view
+                            (gotoButton "Back to Notes" GotoNotes)
+                            (gotoButton "Edit" << GotoEditNote)
+                            (gotoButton "Trash Note" << GotoTrashNote)
+                            SearchNotesMsg
+                            model.searchNotesPage
 
                     SignedIn CreatingNote ->
                         CreateNote.view
@@ -1163,36 +1104,6 @@ trashingNoteView state maybeNote =
 
         Nothing ->
             []
-
-
-searchNotesView : String -> List Supabase.Note -> List (Html Msg)
-searchNotesView searchQuery searchResults =
-    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Search Notes" ]
-    , searchNotesInput searchQuery SearchQueryUpdated
-    , buttons
-        [ searchButton AttemptSearchNotes
-        , clearResultsButton ClearResults
-        , gotoButton "Back to Notes" GotoNotes
-        ]
-    , div [ style "margin-top" "1rem" ] (List.map noteCard searchResults)
-    ]
-
-
-noteCard : Supabase.Note -> Html Msg
-noteCard note =
-    div
-        [ style "border" "1px solid #ddd"
-        , style "padding" "0.75rem"
-        , style "border-radius" "0.5rem"
-        , style "margin-bottom" "0.5rem"
-        ]
-        [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text note.title ]
-        , p [ style "margin" "0" ] [ text note.body ]
-        , buttons
-            [ gotoButton "Edit" (GotoEditNote note)
-            , gotoButton "Trash Note" (GotoTrashNote note)
-            ]
-        ]
 
 
 trashedNoteCard : Supabase.Note -> Html Msg

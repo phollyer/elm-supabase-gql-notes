@@ -1,6 +1,7 @@
 query SearchNotes($query: String!) {
   notesCollection(
     filter: {
+      deletedAt: { is: NULL }
       or: [
         { title: { ilike: $query } }
         { body: { ilike: $query } }
