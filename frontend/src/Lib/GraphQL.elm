@@ -6,17 +6,21 @@ module Lib.GraphQL exposing
     , handleFailure
     , isAuthError
     , refreshSessionCmd
+    , restoreNoteCmd
     , searchNotesCmd
+    , softDeleteNoteCmd
     , updateNoteCmd
     )
 
 import Api exposing (Datetime(..), Uuid(..))
 import CreateNote.CreateNote as CreateNote
+import DeleteNoteSoft.DeleteNoteSoft as DeleteNoteSoft
 import GetActiveNotes.GetActiveNotes as GetActiveNotes
 import GraphQL.Engine
 import Http
 import Pages.Shared.Status exposing (Status(..))
 import Ports.Supabase as Supabase
+import RestoreNote.RestoreNote as RestoreNote
 import SearchNotes.SearchNotes as SearchNotes
 import UpdateNote.UpdateNote as UpdateNote
 
@@ -141,6 +145,38 @@ searchNotesCmd config accessToken graphqlSearchNotesLoaded query =
         Api.query
             (SearchNotes.query
                 { query = "%" ++ query ++ "%" }
+            )
+            { headers = headers config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
+
+
+restoreNoteCmd : Config -> String -> (Result GraphQL.Engine.Error RestoreNote.Response -> msg) -> Supabase.Note -> Cmd msg
+restoreNoteCmd config accessToken graphqlNoteRestored note =
+    Cmd.map graphqlNoteRestored <|
+        Api.mutation
+            (RestoreNote.mutation
+                { id = Uuid note.id
+                , deletedAt = Api.null
+                }
+            )
+            { headers = headers config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
+
+
+softDeleteNoteCmd : Config -> String -> (Result GraphQL.Engine.Error DeleteNoteSoft.Response -> msg) -> Supabase.Note -> Cmd msg
+softDeleteNoteCmd config accessToken graphqlNoteDeletedSoft note =
+    Cmd.map graphqlNoteDeletedSoft <|
+        Api.mutation
+            (DeleteNoteSoft.mutation
+                { id = Uuid note.id
+                , deletedAt = Datetime "1970-01-01T00:00:00Z"
+                }
             )
             { headers = headers config.publishableKey accessToken
             , url = config.graphqlUrl

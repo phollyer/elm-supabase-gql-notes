@@ -63,7 +63,10 @@ checkPassword password =
 
 checkPasswordConfirm : String -> String -> Maybe Error
 checkPasswordConfirm password passwordConfirm =
-    if String.isEmpty passwordConfirm then
+    if String.isEmpty password then
+        Nothing
+
+    else if String.isEmpty passwordConfirm then
         Just passwordConfirmIsRequired
 
     else if password /= passwordConfirm then

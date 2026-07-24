@@ -4,7 +4,6 @@ import Api exposing (Datetime(..), Uuid(..), datetimeToString, uuidToString)
 import Browser
 import CreateNote.CreateNote as CreateNote
 import DeleteNoteHard.DeleteNoteHard as DeleteNoteHard
-import DeleteNoteSoft.DeleteNoteSoft as DeleteNoteSoft
 import GetActiveNotes.GetActiveNotes as GetActiveNotes
 import GetProfile.GetProfile as GetProfile
 import GetTrashedNotes.GetTrashedNotes as GetTrashedNotes
@@ -18,6 +17,7 @@ import Pages.Auth.MagicLink as MagicLink
 import Pages.Auth.SignIn as SignIn
 import Pages.Auth.SignUp as SignUp
 import Pages.Notes.Create as CreateNote
+import Pages.Notes.DeleteSoft as DeleteNoteSoft
 import Pages.Notes.Edit as EditNote
 import Pages.Notes.Notes as Notes
 import Pages.Notes.Search as SearchNotes
@@ -48,6 +48,7 @@ type alias Model =
     , signInPage : SignIn.Model
     , signUpPage : SignUp.Model
     , createNotePage : CreateNote.Model
+    , deleteNoteSoftPage : DeleteNoteSoft.Model
     , editNotePage : EditNote.Model
     , notesPage : Notes.Model
     , searchNotesPage : SearchNotes.Model
@@ -86,6 +87,7 @@ init flags =
       , signInPage = SignIn.init
       , signUpPage = SignUp.init
       , createNotePage = CreateNote.init config Nothing Nothing
+      , deleteNoteSoftPage = DeleteNoteSoft.init config Nothing Nothing
       , editNotePage = EditNote.init config Nothing Nothing
       , notesPage = Notes.init config Nothing Nothing
       , searchNotesPage = SearchNotes.init config Nothing Nothing
@@ -133,13 +135,13 @@ type Msg
     | MagicLinkMsg MagicLink.Msg
     | ProfileMsg Profile.Msg
     | CreateNoteMsg CreateNote.Msg
+    | DeleteNoteSoftMsg DeleteNoteSoft.Msg
     | EditNoteMsg EditNote.Msg
     | SearchNotesMsg SearchNotes.Msg
     | NotesMsg Notes.Msg
     | StartSessionCheck
     | AttemptSignOut
     | AttemptDeleteNoteHard
-    | AttemptDeleteNoteSoft
     | AttemptRestoreNote Supabase.Note
     | AttemptFetchTrash
     | AttemptFetchProfile
@@ -156,7 +158,6 @@ type Msg
     | GotoProfilePage
     | GraphqlNotesLoaded (Result GraphQL.Engine.Error GetActiveNotes.Response)
     | GraphqlNoteDeletedHard (Result GraphQL.Engine.Error DeleteNoteHard.Response)
-    | GraphqlNoteDeletedSoft (Result GraphQL.Engine.Error DeleteNoteSoft.Response)
     | GraphqlNoteRestored (Result GraphQL.Engine.Error RestoreNote.Response)
     | GraphqlTrashLoaded (Result GraphQL.Engine.Error GetTrashedNotes.Response)
     | GraphqlAvatarPathUpdated (Result GraphQL.Engine.Error UpdateProfileAvatar.Response)
@@ -184,17 +185,6 @@ flattenGetNotes response =
 getNotesToSupabaseNotes : GetActiveNotes.Response -> List Supabase.Note
 getNotesToSupabaseNotes =
     flattenGetNotes >> List.map toSupabaseNote
-
-
-toSupabaseDeleteNoteSoft : DeleteNoteSoft.Records -> Supabase.Note
-toSupabaseDeleteNoteSoft { id, title, body, createdAt, updatedAt, deletedAt } =
-    { id = uuidToString id
-    , title = title
-    , body = body
-    , createdAt = datetimeToString createdAt
-    , updatedAt = datetimeToString updatedAt
-    , deletedAt = Maybe.map datetimeToString deletedAt
-    }
 
 
 toSupabaseNote : GetActiveNotes.Node -> Supabase.Note
@@ -230,22 +220,6 @@ hardDeleteNoteCmd config accessToken note =
         Api.mutation
             (DeleteNoteHard.mutation
                 { id = Uuid note.id }
-            )
-            { headers = graphqlHeaders config.publishableKey accessToken
-            , url = config.graphqlUrl
-            , timeout = Nothing
-            , tracker = Nothing
-            }
-
-
-softDeleteNoteCmd : Config -> String -> Supabase.Note -> Cmd Msg
-softDeleteNoteCmd config accessToken note =
-    Cmd.map GraphqlNoteDeletedSoft <|
-        Api.mutation
-            (DeleteNoteSoft.mutation
-                { id = Uuid note.id
-                , deletedAt = Datetime "1970-01-01T00:00:00Z"
-                }
             )
             { headers = graphqlHeaders config.publishableKey accessToken
             , url = config.graphqlUrl
@@ -307,7 +281,7 @@ subscriptions _ =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
+    case msg |> Debug.log "Main update msg" of
         StartSessionCheck ->
             ( { model | status = Just (Info "Checking session...") }
             , refreshSessionCmd model
@@ -347,6 +321,15 @@ update msg model =
             in
             ( { model | createNotePage = updatedCreateNoteModel }
             , Cmd.map CreateNoteMsg createNoteCmd
+            )
+
+        DeleteNoteSoftMsg deleteNoteSoftMsg ->
+            let
+                ( updatedDeleteNoteSoftModel, deleteNoteSoftCmd ) =
+                    DeleteNoteSoft.update deleteNoteSoftMsg model.deleteNoteSoftPage
+            in
+            ( { model | deleteNoteSoftPage = updatedDeleteNoteSoftModel }
+            , Cmd.map DeleteNoteSoftMsg deleteNoteSoftCmd
             )
 
         EditNoteMsg updateNoteMsg ->
@@ -444,9 +427,10 @@ update msg model =
 
         GotoTrashNote note ->
             ( { model
-                | currentNote = Just note
-                , status = Just (Warning "This will put your note in the trash. You can restore it later.")
-                , state = SignedIn (TrashingNote DeleteReady)
+                | state = SignedIn (TrashingNote DeleteReady)
+                , deleteNoteSoftPage =
+                    DeleteNoteSoft.init model.config model.accessToken model.userId
+                        |> DeleteNoteSoft.setNote note
               }
             , Cmd.none
             )
@@ -507,21 +491,6 @@ update msg model =
                 ( Just accessToken, Just note ) ->
                     ( { model | status = Just (Info "Deleting note...") }
                     , hardDeleteNoteCmd model.config accessToken note
-                    )
-
-                ( Nothing, _ ) ->
-                    ( { model | status = Just (Error "Session info missing. Re-checking session...") }
-                    , refreshSessionCmd model
-                    )
-
-                ( _, Nothing ) ->
-                    ( { model | status = Just (Error "No note selected for deletion") }, Cmd.none )
-
-        AttemptDeleteNoteSoft ->
-            case ( model.accessToken, model.currentNote ) of
-                ( Just accessToken, Just note ) ->
-                    ( { model | status = Just (Info "Sending your note to the trash...") }
-                    , softDeleteNoteCmd model.config accessToken note
                     )
 
                 ( Nothing, _ ) ->
@@ -601,37 +570,6 @@ update msg model =
 
                 Err error ->
                     handleGraphqlFailure "GraphQL note deletion failed" error model
-
-        GraphqlNoteDeletedSoft result ->
-            case result of
-                Ok response ->
-                    case response.updateNotesCollection.records of
-                        record :: _ ->
-                            let
-                                deletedNoteId =
-                                    uuidToString record.id
-                            in
-                            ( { model
-                                | notes =
-                                    List.filter (\n -> n.id /= deletedNoteId) model.notes
-                                , trashedNotes = toSupabaseDeleteNoteSoft record :: model.trashedNotes
-                                , status = Just (Success "Note has been trashed successfully")
-                                , currentNote = Nothing
-                                , state = SignedIn (TrashingNote DeleteSuccess)
-                              }
-                            , Cmd.none
-                            )
-
-                        [] ->
-                            ( { model
-                                | status = Just (Error "Soft delete mutation returned empty records list")
-                                , state = SignedIn (TrashingNote DeleteFailure)
-                              }
-                            , Cmd.none
-                            )
-
-                Err error ->
-                    handleGraphqlFailure "GraphQL note soft deletion failed" error model
 
         GraphqlNoteRestored result ->
             case result of
@@ -975,8 +913,11 @@ view model =
                     SignedIn (DeleteNote state) ->
                         deleteNoteView state model.currentNote
 
-                    SignedIn (TrashingNote state) ->
-                        trashingNoteView state model.currentNote
+                    SignedIn (TrashingNote _) ->
+                        DeleteNoteSoft.view
+                            (gotoButton "Back to Notes" GotoNotes)
+                            DeleteNoteSoftMsg
+                            model.deleteNoteSoftPage
 
                     SignedIn ViewingProfile ->
                         Profile.view model.profilePage
@@ -1029,39 +970,6 @@ deleteNoteView state maybeNote =
 
                     DeleteSuccess ->
                         div [] []
-
-                    DeleteFailure ->
-                        div [] []
-                , gotoButton "Back to Notes" GotoNotes
-                ]
-            ]
-
-        Nothing ->
-            []
-
-
-trashingNoteView : DeleteState -> Maybe Supabase.Note -> List (Html Msg)
-trashingNoteView state maybeNote =
-    case maybeNote of
-        Just note ->
-            [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Trash Note" ]
-            , div
-                [ style "border" "1px solid #ddd"
-                , style "padding" "0.75rem"
-                , style "border-radius" "0.5rem"
-                , style "margin-bottom" "0.5rem"
-                ]
-                [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text note.title ]
-                , p [ style "margin" "0" ] [ text note.body ]
-                ]
-            , buttons
-                [ case state of
-                    DeleteReady ->
-                        attemptButton "Confirm" AttemptDeleteNoteSoft
-
-                    DeleteSuccess ->
-                        attemptButton "Reinstate" <|
-                            AttemptRestoreNote note
 
                     DeleteFailure ->
                         div [] []
