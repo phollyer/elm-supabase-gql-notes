@@ -4,6 +4,7 @@ module Lib.GraphQL exposing
     , fetchNotesCmd
     , formatError
     , handleFailure
+    , hardDeleteNoteCmd
     , isAuthError
     , refreshSessionCmd
     , restoreNoteCmd
@@ -14,6 +15,7 @@ module Lib.GraphQL exposing
 
 import Api exposing (Datetime(..), Uuid(..))
 import CreateNote.CreateNote as CreateNote
+import DeleteNoteHard.DeleteNoteHard as DeleteNoteHard
 import DeleteNoteSoft.DeleteNoteSoft as DeleteNoteSoft
 import GetActiveNotes.GetActiveNotes as GetActiveNotes
 import GraphQL.Engine
@@ -161,6 +163,20 @@ restoreNoteCmd config accessToken graphqlNoteRestored note =
                 { id = Uuid note.id
                 , deletedAt = Api.null
                 }
+            )
+            { headers = headers config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
+
+
+hardDeleteNoteCmd : Config -> String -> (Result GraphQL.Engine.Error DeleteNoteHard.Response -> msg) -> Supabase.Note -> Cmd msg
+hardDeleteNoteCmd config accessToken graphqlNoteDeletedHard note =
+    Cmd.map graphqlNoteDeletedHard <|
+        Api.mutation
+            (DeleteNoteHard.mutation
+                { id = Uuid note.id }
             )
             { headers = headers config.publishableKey accessToken
             , url = config.graphqlUrl
