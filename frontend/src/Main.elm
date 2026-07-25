@@ -1,9 +1,8 @@
 module Main exposing (main)
 
-import Api exposing (Datetime(..), Uuid(..), datetimeToString, uuidToString)
+import Api exposing (Datetime(..), Uuid(..))
 import Browser
 import CreateNote.CreateNote as CreateNote
-import GetActiveNotes.GetActiveNotes as GetActiveNotes
 import GetProfile.GetProfile as GetProfile
 import GraphQL.Engine
 import Html exposing (..)
@@ -24,9 +23,7 @@ import Pages.Notes.Trash as Trash
 import Pages.Profile as Profile
 import Pages.Shared.Status exposing (Status(..))
 import Ports.Supabase as Supabase
-import RestoreNote.RestoreNote as RestoreNote
-import SearchNotes.SearchNotes as SearchNotes
-import UI.FormElements exposing (attemptButton, buttons, gotoButton, gotoStartButton)
+import UI.FormElements as FE
 import UpdateProfileAvatar.UpdateProfileAvatar as UpdateProfileAvatar
 
 
@@ -139,9 +136,7 @@ type Msg
     | SearchNotesMsg SearchNotes.Msg
     | TrashMsg Trash.Msg
     | NotesMsg Notes.Msg
-    | StartSessionCheck
     | AttemptSignOut
-    | AttemptRestoreNote Supabase.Note
     | GotoTrash
     | AttemptFetchProfile
     | GotoStart
@@ -155,8 +150,6 @@ type Msg
     | GotoDeleteNote Supabase.Note
     | GotoTrashNote Supabase.Note
     | GotoProfilePage
-    | GraphqlNotesLoaded (Result GraphQL.Engine.Error GetActiveNotes.Response)
-    | GraphqlNoteRestored (Result GraphQL.Engine.Error RestoreNote.Response)
     | GraphqlAvatarPathUpdated (Result GraphQL.Engine.Error UpdateProfileAvatar.Response)
     | GraphqlProfileLoaded (Result GraphQL.Engine.Error GetProfile.Response)
     | SupabaseEventReceived Decode.Value
@@ -172,43 +165,6 @@ graphqlHeaders publishableKey accessToken =
 nextRequestId : Model -> String
 nextRequestId model =
     "req-" ++ String.fromInt model.nextId
-
-
-flattenGetNotes : GetActiveNotes.Response -> List GetActiveNotes.Node
-flattenGetNotes response =
-    List.map .node response.notesCollection.edges
-
-
-getNotesToSupabaseNotes : GetActiveNotes.Response -> List Supabase.Note
-getNotesToSupabaseNotes =
-    flattenGetNotes >> List.map toSupabaseNote
-
-
-toSupabaseNote : GetActiveNotes.Node -> Supabase.Note
-toSupabaseNote { id, title, body, createdAt, updatedAt, deletedAt } =
-    { id = uuidToString id
-    , title = title
-    , body = body
-    , createdAt = datetimeToString createdAt
-    , updatedAt = datetimeToString updatedAt
-    , deletedAt = Maybe.map datetimeToString deletedAt
-    }
-
-
-restoreNoteCmd : Config -> String -> Supabase.Note -> Cmd Msg
-restoreNoteCmd config accessToken note =
-    Cmd.map GraphqlNoteRestored <|
-        Api.mutation
-            (RestoreNote.mutation
-                { id = Uuid note.id
-                , deletedAt = Api.null
-                }
-            )
-            { headers = graphqlHeaders config.publishableKey accessToken
-            , url = config.graphqlUrl
-            , timeout = Nothing
-            , tracker = Nothing
-            }
 
 
 fetchProfileCmd : Config -> String -> String -> Cmd Msg
@@ -253,12 +209,7 @@ subscriptions _ =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg |> Debug.log "Main update msg" of
-        StartSessionCheck ->
-            ( { model | status = Just (Info "Checking session...") }
-            , refreshSessionCmd model
-            )
-
+    case msg of
         SignUpMsg signUpMsg ->
             let
                 ( updatedSignUpModel, signUpCmd ) =
@@ -478,21 +429,6 @@ update msg model =
             , Supabase.sendCommand (Supabase.SignOut { requestId = nextRequestId model })
             )
 
-        AttemptRestoreNote note ->
-            case model.accessToken of
-                Just accessToken ->
-                    ( { model
-                        | status = Just (Info "Restoring note...")
-                        , currentNote = Just note
-                      }
-                    , restoreNoteCmd model.config accessToken note
-                    )
-
-                Nothing ->
-                    ( { model | status = Just (Error "Session info missing. Re-checking session...") }
-                    , refreshSessionCmd model
-                    )
-
         AttemptFetchProfile ->
             case ( model.accessToken, model.userId ) of
                 ( Just accessToken, Just userId ) ->
@@ -504,57 +440,6 @@ update msg model =
                     ( { model | status = Just (Error "Session info missing. Re-checking session...") }
                     , refreshSessionCmd model
                     )
-
-        GraphqlNoteRestored result ->
-            case result of
-                Ok response ->
-                    case response.updateNotesCollection.affectedCount of
-                        1 ->
-                            case model.currentNote of
-                                Just note ->
-                                    let
-                                        restoredNote =
-                                            { note | deletedAt = Nothing }
-                                    in
-                                    ( { model
-                                        | notes = restoredNote :: model.notes
-                                        , trashedNotes =
-                                            List.filter (\n -> n.id /= note.id) model.trashedNotes
-                                        , status = Just (Success "Note restored successfully")
-                                        , currentNote = Nothing
-                                      }
-                                    , Cmd.none
-                                    )
-
-                                Nothing ->
-                                    ( { model | status = Just (Error "No current note to restore") }, Cmd.none )
-
-                        0 ->
-                            ( { model | status = Just (Error "Restore mutation returned no records") }
-                            , Cmd.none
-                            )
-
-                        _ ->
-                            ( { model | status = Just (Error "Restore mutation affected multiple records, which is unexpected") }
-                            , Cmd.none
-                            )
-
-                Err error ->
-                    handleGraphqlFailure "GraphQL note restoration failed" error model
-
-        GraphqlNotesLoaded result ->
-            case result of
-                Ok response ->
-                    ( { model
-                        | notes = getNotesToSupabaseNotes response
-                        , status = Nothing
-                        , state = SignedIn ViewingNotes
-                      }
-                    , Cmd.none
-                    )
-
-                Err error ->
-                    handleGraphqlFailure "GraphQL notes load failed" error model
 
         GraphqlAvatarPathUpdated result ->
             case result of
@@ -747,18 +632,18 @@ view model =
                         [ style "display" "flex"
                         , style "gap" "0.5rem"
                         ]
-                        [ gotoButton "Create" GotoCreateNote
-                        , gotoButton "Notes" GotoNotes
-                        , gotoButton "Search" GotoSearch
+                        [ FE.gotoButton "Create" GotoCreateNote
+                        , FE.gotoButton "Notes" GotoNotes
+                        , FE.gotoButton "Search" GotoSearch
                         ]
                     , div
                         [ style "display" "flex"
                         , style "gap" "0.5rem"
                         , style "margin-left" "auto"
                         ]
-                        [ attemptButton "Trash" GotoTrash
-                        , gotoButton "Profile" GotoProfilePage
-                        , attemptButton "Sign out" AttemptSignOut
+                        [ FE.attemptButton "Trash" GotoTrash
+                        , FE.gotoButton "Profile" GotoProfilePage
+                        , FE.attemptButton "Sign out" AttemptSignOut
                         ]
                     ]
 
@@ -769,28 +654,28 @@ view model =
          ]
             ++ (case model.state of
                     Start ->
-                        [ buttons
-                            [ gotoButton "Sign up" GotoSignUp
-                            , gotoButton "Sign in" GotoSignIn
-                            , gotoButton "Magic link" GotoMagicLink
+                        [ FE.buttons
+                            [ FE.gotoButton "Sign up" GotoSignUp
+                            , FE.gotoButton "Sign in" GotoSignIn
+                            , FE.gotoButton "Magic link" GotoMagicLink
                             ]
                         ]
 
                     SignUp ->
                         SignUp.view
-                            (gotoStartButton GotoStart)
+                            (FE.gotoStartButton GotoStart)
                             SignUpMsg
                             model.signUpPage
 
                     SignIn ->
                         SignIn.view
-                            (gotoStartButton GotoStart)
+                            (FE.gotoStartButton GotoStart)
                             SignInMsg
                             model.signInPage
 
                     MagicLink ->
                         MagicLink.view
-                            (gotoStartButton GotoStart)
+                            (FE.gotoStartButton GotoStart)
                             MagicLinkMsg
                             model.magicLinkPage
 
@@ -804,43 +689,47 @@ view model =
                         ]
 
                     SignedIn ViewingNotes ->
-                        Notes.view GotoEditNote GotoTrashNote NotesMsg model.notesPage
+                        Notes.view
+                            GotoEditNote
+                            GotoTrashNote
+                            NotesMsg
+                            model.notesPage
 
                     SignedIn ViewingTrash ->
                         Trash.view
-                            (gotoButton "Delete" << GotoDeleteNote)
+                            (FE.gotoButton "Delete" << GotoDeleteNote)
                             TrashMsg
                             model.trashPage
 
                     SignedIn SearchingNotes ->
                         SearchNotes.view
-                            (gotoButton "Back to Notes" GotoNotes)
-                            (gotoButton "Edit" << GotoEditNote)
-                            (gotoButton "Trash Note" << GotoTrashNote)
+                            (FE.gotoButton "Back to Notes" GotoNotes)
+                            (FE.gotoButton "Edit" << GotoEditNote)
+                            (FE.gotoButton "Trash Note" << GotoTrashNote)
                             SearchNotesMsg
                             model.searchNotesPage
 
                     SignedIn CreatingNote ->
                         CreateNote.view
-                            (gotoButton "Back to Notes" GotoNotes)
+                            (FE.gotoButton "Back to Notes" GotoNotes)
                             CreateNoteMsg
                             model.createNotePage
 
                     SignedIn EditingNote ->
                         EditNote.view
-                            (gotoButton "Back to Notes" GotoNotes)
+                            (FE.gotoButton "Back to Notes" GotoNotes)
                             EditNoteMsg
                             model.editNotePage
 
                     SignedIn DeleteNote ->
                         DeleteNoteHard.view
-                            (gotoButton "Back to Notes" GotoNotes)
+                            (FE.gotoButton "Back to Notes" GotoNotes)
                             DeleteNoteHardMsg
                             model.deleteNoteHardPage
 
                     SignedIn TrashingNote ->
                         DeleteNoteSoft.view
-                            (gotoButton "Back to Notes" GotoNotes)
+                            (FE.gotoButton "Back to Notes" GotoNotes)
                             DeleteNoteSoftMsg
                             model.deleteNoteSoftPage
 
