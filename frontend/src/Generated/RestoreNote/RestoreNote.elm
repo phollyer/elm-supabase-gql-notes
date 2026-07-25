@@ -1,10 +1,13 @@
-module RestoreNote.RestoreNote exposing (Input, Response, UpdateNotesCollection, mutation)
+module RestoreNote.RestoreNote exposing
+    ( Input
+    , Response
+    , mutation
+    , UpdateNotesCollection, Records
+    )
 
-{-|
-This file is generated from ../supabase/queries/restoreNote.gql using `elm-gql`
+{-| This file is generated from ../supabase/queries/restoreNote.gql using `elm-gql`
 
 Please avoid modifying directly.
-
 
 @docs Input
 
@@ -12,11 +15,9 @@ Please avoid modifying directly.
 
 @docs mutation
 
-@docs UpdateNotesCollection
-
+@docs UpdateNotesCollection, Records
 
 -}
-
 
 import Api
 import GraphQL.Decode
@@ -29,13 +30,14 @@ import Json.Encode
 {-| This input has optional args, which are wrapped in `Api.Option`.
 
 First up, if it makes sense, you can make this argument required in your graphql query
-by adding ! to that variable definition at the top of the query.  This will make it easier to handle in Elm.
+by adding ! to that variable definition at the top of the query. This will make it easier to handle in Elm.
 
 If the field is truly optional, here's how to wrap it.
 
     - Api.present myValue -- this field should be myValue
     - Api.absent -- do not include this field at all in the GraphQL
     - Api.null -- include this field as a null value.  Not as common as .absent.
+
 -}
 type alias Input =
     { id : Api.Uuid, deletedAt : Api.Option Api.Datetime }
@@ -46,28 +48,31 @@ mutation args =
     GraphQL.Engine.operation
         (Just "RestoreNote")
         (\version_ ->
-             { args =
-                 GraphQL.InputObject.toFieldList
-                     (GraphQL.InputObject.inputObject
-                          "Input" |> GraphQL.InputObject.addOptionalField
-                                             "deletedAt"
-                                             "Datetime"
-                                             args.deletedAt
-                                             Api.datetime.encode |> GraphQL.InputObject.addField
-                                                                            "id"
-                                                                            "UUID!"
-                                                                            (Api.uuid.encode
-                                                                                     args.id
-                                                                            )
-                     )
-             , body = toPayload_ version_
-             , fragments = toFragments_ version_
-             }
+            { args =
+                GraphQL.InputObject.toFieldList
+                    (GraphQL.InputObject.inputObject
+                        "Input"
+                        |> GraphQL.InputObject.addOptionalField
+                            "deletedAt"
+                            "Datetime"
+                            args.deletedAt
+                            Api.datetime.encode
+                        |> GraphQL.InputObject.addField
+                            "id"
+                            "UUID!"
+                            (Api.uuid.encode
+                                args.id
+                            )
+                    )
+            , body = toPayload_ version_
+            , fragments = toFragments_ version_
+            }
         )
         decoder_
 
 
-{-  Return data  -}
+
+{- Return data -}
 
 
 type alias Response =
@@ -75,30 +80,73 @@ type alias Response =
 
 
 type alias UpdateNotesCollection =
-    { affectedCount : Int }
+    { affectedCount : Int, records : List Records }
+
+
+type alias Records =
+    { id : Api.Uuid
+    , title : String
+    , body : String
+    , createdAt : Api.Datetime
+    , updatedAt : Api.Datetime
+    }
 
 
 decoder_ : Int -> Json.Decode.Decoder Response
 decoder_ version_ =
-    Json.Decode.succeed Response |> GraphQL.Decode.versionedField
-                                            version_
-                                            "updateNotesCollection"
-                                            (Json.Decode.succeed
-                                                     UpdateNotesCollection |> GraphQL.Decode.field
-                                                                                          "affectedCount"
-                                                                                          Json.Decode.int
-                                            )
+    Json.Decode.succeed Response
+        |> GraphQL.Decode.versionedField
+            version_
+            "updateNotesCollection"
+            (Json.Decode.succeed
+                UpdateNotesCollection
+                |> GraphQL.Decode.field
+                    "affectedCount"
+                    Json.Decode.int
+                |> GraphQL.Decode.field
+                    "records"
+                    (Json.Decode.list
+                        (Json.Decode.succeed
+                            Records
+                            |> GraphQL.Decode.field
+                                "id"
+                                Api.uuid.decoder
+                            |> GraphQL.Decode.field
+                                "title"
+                                Json.Decode.string
+                            |> GraphQL.Decode.field
+                                "body"
+                                Json.Decode.string
+                            |> GraphQL.Decode.field
+                                "createdAt"
+                                Api.datetime.decoder
+                            |> GraphQL.Decode.field
+                                "updatedAt"
+                                Api.datetime.decoder
+                        )
+                    )
+            )
 
 
 toPayload_ : Int -> String
 toPayload_ version_ =
     ((((GraphQL.Engine.versionedAlias
             version_
-            "updateNotesCollection" ++ " (set: {deletedAt: "
-       ) ++ GraphQL.Engine.versionedName version_ "$deletedAt"
-      ) ++ "}, filter: {id: {eq: "
-     ) ++ GraphQL.Engine.versionedName version_ "$id"
-    ) ++ "}}, atMost: 1) {affectedCount }"
+            "updateNotesCollection"
+            ++ " (set: {deletedAt: "
+       )
+        ++ GraphQL.Engine.versionedName version_ "$deletedAt"
+      )
+        ++ "}, filter: {id: {eq: "
+     )
+        ++ GraphQL.Engine.versionedName version_ "$id"
+    )
+        ++ """}}, atMost: 1) {affectedCount
+records {id
+title
+body
+createdAt
+updatedAt } }"""
 
 
 toFragments_ : Int -> String

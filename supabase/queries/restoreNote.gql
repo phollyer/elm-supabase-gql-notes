@@ -5,5 +5,12 @@ mutation RestoreNote($id: UUID!, $deletedAt: Datetime) {
         atMost: 1
     ) {
         affectedCount
+        records {
+        id
+        title
+        body
+        createdAt
+        updatedAt
+        }
     }
 }

@@ -2,7 +2,9 @@ module Lib.GraphQL exposing
     ( Config
     , createNoteCmd
     , fetchNotesCmd
+    , fetchTrashCmd
     , formatError
+    , getActiveNotesToSupabaseNotes
     , handleFailure
     , hardDeleteNoteCmd
     , isAuthError
@@ -18,6 +20,7 @@ import CreateNote.CreateNote as CreateNote
 import DeleteNoteHard.DeleteNoteHard as DeleteNoteHard
 import DeleteNoteSoft.DeleteNoteSoft as DeleteNoteSoft
 import GetActiveNotes.GetActiveNotes as GetActiveNotes
+import GetTrashedNotes.GetTrashedNotes as GetTrashedNotes
 import GraphQL.Engine
 import Http
 import Pages.Shared.Status exposing (Status(..))
@@ -91,6 +94,27 @@ handleFailure prefix error model =
         )
 
 
+flattenGetActiveNotes : GetActiveNotes.Response -> List GetActiveNotes.Node
+flattenGetActiveNotes response =
+    List.map .node response.notesCollection.edges
+
+
+getActiveNotesToSupabaseNotes : GetActiveNotes.Response -> List Supabase.Note
+getActiveNotesToSupabaseNotes =
+    flattenGetActiveNotes >> List.map toSupabaseNote
+
+
+toSupabaseNote : GetActiveNotes.Node -> Supabase.Note
+toSupabaseNote { id, title, body, createdAt, updatedAt, deletedAt } =
+    { id = Api.uuidToString id
+    , title = title
+    , body = body
+    , createdAt = Api.datetimeToString createdAt
+    , updatedAt = Api.datetimeToString updatedAt
+    , deletedAt = Maybe.map Api.datetimeToString deletedAt
+    }
+
+
 refreshSessionCmd : String -> Cmd msg
 refreshSessionCmd requestId =
     Supabase.sendCommand (Supabase.RefreshSession { requestId = requestId })
@@ -100,6 +124,17 @@ fetchNotesCmd : Config -> String -> (Result GraphQL.Engine.Error GetActiveNotes.
 fetchNotesCmd config accessToken graphqlNotesLoaded =
     Cmd.map graphqlNotesLoaded <|
         Api.query GetActiveNotes.query
+            { headers = headers config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
+
+
+fetchTrashCmd : Config -> String -> (Result GraphQL.Engine.Error GetTrashedNotes.Response -> msg) -> Cmd msg
+fetchTrashCmd config accessToken graphqlTrashLoaded =
+    Cmd.map graphqlTrashLoaded <|
+        Api.query GetTrashedNotes.query
             { headers = headers config.publishableKey accessToken
             , url = config.graphqlUrl
             , timeout = Nothing

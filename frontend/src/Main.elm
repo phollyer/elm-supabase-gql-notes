@@ -5,7 +5,6 @@ import Browser
 import CreateNote.CreateNote as CreateNote
 import GetActiveNotes.GetActiveNotes as GetActiveNotes
 import GetProfile.GetProfile as GetProfile
-import GetTrashedNotes.GetTrashedNotes as GetTrashedNotes
 import GraphQL.Engine
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -21,6 +20,7 @@ import Pages.Notes.DeleteSoft as DeleteNoteSoft
 import Pages.Notes.Edit as EditNote
 import Pages.Notes.Notes as Notes
 import Pages.Notes.Search as SearchNotes
+import Pages.Notes.Trash as Trash
 import Pages.Profile as Profile
 import Pages.Shared.Status exposing (Status(..))
 import Ports.Supabase as Supabase
@@ -53,6 +53,7 @@ type alias Model =
     , editNotePage : EditNote.Model
     , notesPage : Notes.Model
     , searchNotesPage : SearchNotes.Model
+    , trashPage : Trash.Model
     , profilePage : Profile.Model
     , status : Maybe Status
     , state : State
@@ -93,6 +94,7 @@ init flags =
       , editNotePage = EditNote.init config Nothing Nothing
       , notesPage = Notes.init config Nothing Nothing
       , searchNotesPage = SearchNotes.init config Nothing Nothing
+      , trashPage = Trash.init config Nothing Nothing
       , profilePage = Profile.init
       , status = Just (Info "Checking session...")
       , state = Start
@@ -135,11 +137,12 @@ type Msg
     | DeleteNoteSoftMsg DeleteNoteSoft.Msg
     | EditNoteMsg EditNote.Msg
     | SearchNotesMsg SearchNotes.Msg
+    | TrashMsg Trash.Msg
     | NotesMsg Notes.Msg
     | StartSessionCheck
     | AttemptSignOut
     | AttemptRestoreNote Supabase.Note
-    | AttemptFetchTrash
+    | GotoTrash
     | AttemptFetchProfile
     | GotoStart
     | GotoSignUp
@@ -154,7 +157,6 @@ type Msg
     | GotoProfilePage
     | GraphqlNotesLoaded (Result GraphQL.Engine.Error GetActiveNotes.Response)
     | GraphqlNoteRestored (Result GraphQL.Engine.Error RestoreNote.Response)
-    | GraphqlTrashLoaded (Result GraphQL.Engine.Error GetTrashedNotes.Response)
     | GraphqlAvatarPathUpdated (Result GraphQL.Engine.Error UpdateProfileAvatar.Response)
     | GraphqlProfileLoaded (Result GraphQL.Engine.Error GetProfile.Response)
     | SupabaseEventReceived Decode.Value
@@ -202,17 +204,6 @@ restoreNoteCmd config accessToken note =
                 , deletedAt = Api.null
                 }
             )
-            { headers = graphqlHeaders config.publishableKey accessToken
-            , url = config.graphqlUrl
-            , timeout = Nothing
-            , tracker = Nothing
-            }
-
-
-fetchTrashCmd : Config -> String -> Cmd Msg
-fetchTrashCmd config accessToken =
-    Cmd.map GraphqlTrashLoaded <|
-        Api.query GetTrashedNotes.query
             { headers = graphqlHeaders config.publishableKey accessToken
             , url = config.graphqlUrl
             , timeout = Nothing
@@ -340,6 +331,15 @@ update msg model =
             , Cmd.map SearchNotesMsg searchNotesCmd
             )
 
+        TrashMsg trashMsg ->
+            let
+                ( updatedTrashModel, trashCmd ) =
+                    Trash.update trashMsg model.trashPage
+            in
+            ( { model | trashPage = updatedTrashModel }
+            , Cmd.map TrashMsg trashCmd
+            )
+
         NotesMsg notesMsg ->
             let
                 ( updatedNotesModel, notesCmd ) =
@@ -447,6 +447,19 @@ update msg model =
             , Cmd.none
             )
 
+        GotoTrash ->
+            let
+                ( updatedTrashModel, trashCmd ) =
+                    Trash.init model.config model.accessToken model.userId
+                        |> Trash.fetch
+            in
+            ( { model
+                | state = SignedIn ViewingTrash
+                , trashPage = updatedTrashModel
+              }
+            , Cmd.map TrashMsg trashCmd
+            )
+
         GotoProfilePage ->
             ( { model
                 | status = Nothing
@@ -464,18 +477,6 @@ update msg model =
             ( { model | status = Just (Info "Signing out...") }
             , Supabase.sendCommand (Supabase.SignOut { requestId = nextRequestId model })
             )
-
-        AttemptFetchTrash ->
-            case model.accessToken of
-                Just accessToken ->
-                    ( { model | status = Just (Info "Loading trash...") }
-                    , fetchTrashCmd model.config accessToken
-                    )
-
-                Nothing ->
-                    ( { model | status = Just (Error "No access token. Re-checking session...") }
-                    , refreshSessionCmd model
-                    )
 
         AttemptRestoreNote note ->
             case model.accessToken of
@@ -578,21 +579,6 @@ update msg model =
 
                 Err error ->
                     handleGraphqlFailure "GraphQL avatar path update failed" error model
-
-        GraphqlTrashLoaded result ->
-            case result of
-                Ok response ->
-                    ( { model
-                        | trashedNotes = getNotesToSupabaseNotes response
-                        , notes = []
-                        , status = Nothing
-                        , state = SignedIn ViewingTrash
-                      }
-                    , Cmd.none
-                    )
-
-                Err error ->
-                    handleGraphqlFailure "GraphQL trash load failed" error model
 
         GraphqlProfileLoaded result ->
             case result of
@@ -770,7 +756,7 @@ view model =
                         , style "gap" "0.5rem"
                         , style "margin-left" "auto"
                         ]
-                        [ attemptButton "Trash" AttemptFetchTrash
+                        [ attemptButton "Trash" GotoTrash
                         , gotoButton "Profile" GotoProfilePage
                         , attemptButton "Sign out" AttemptSignOut
                         ]
@@ -821,7 +807,10 @@ view model =
                         Notes.view GotoEditNote GotoTrashNote NotesMsg model.notesPage
 
                     SignedIn ViewingTrash ->
-                        signedInTrashView model.trashedNotes
+                        Trash.view
+                            (gotoButton "Delete" << GotoDeleteNote)
+                            TrashMsg
+                            model.trashPage
 
                     SignedIn SearchingNotes ->
                         SearchNotes.view
@@ -871,32 +860,4 @@ headerRow =
         , style "margin-bottom" "1rem"
         ]
         [ h1 [ style "margin" "0" ] [ text "Elm + Supabase + GraphQL" ]
-        ]
-
-
-signedInTrashView : List Supabase.Note -> List (Html Msg)
-signedInTrashView trashedNotes =
-    [ h1 [ style "font-size" "1.3rem", style "margin-top" "1.5rem" ] [ text "Trash" ]
-    , div [ style "margin-top" "1rem" ] (List.map trashedNoteCard trashedNotes)
-    ]
-
-
-
-{- ######### Notes View ######### -}
-
-
-trashedNoteCard : Supabase.Note -> Html Msg
-trashedNoteCard note =
-    div
-        [ style "border" "1px solid #ddd"
-        , style "padding" "0.75rem"
-        , style "border-radius" "0.5rem"
-        , style "margin-bottom" "0.5rem"
-        ]
-        [ p [ style "font-weight" "700", style "margin" "0 0 0.4rem" ] [ text note.title ]
-        , p [ style "margin" "0" ] [ text note.body ]
-        , buttons
-            [ attemptButton "Restore" (AttemptRestoreNote note)
-            , gotoButton "Delete" (GotoDeleteNote note)
-            ]
         ]
