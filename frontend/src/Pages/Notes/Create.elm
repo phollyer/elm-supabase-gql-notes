@@ -7,11 +7,11 @@ module Pages.Notes.Create exposing
     )
 
 import Api
-import CreateNote.CreateNote as CreateNote
 import GraphQL.Engine
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Lib.GraphQL as GraphQL
+import Notes.CreateNote.CreateNote as CreateNote
 import Pages.Shared.Error as Error exposing (Error)
 import Pages.Shared.Status as Status exposing (Status(..))
 import Ports.Supabase as Supabase

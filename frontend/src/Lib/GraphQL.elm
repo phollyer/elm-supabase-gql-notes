@@ -16,18 +16,18 @@ module Lib.GraphQL exposing
     )
 
 import Api exposing (Datetime(..), Uuid(..))
-import CreateNote.CreateNote as CreateNote
-import DeleteNoteHard.DeleteNoteHard as DeleteNoteHard
-import DeleteNoteSoft.DeleteNoteSoft as DeleteNoteSoft
-import GetActiveNotes.GetActiveNotes as GetActiveNotes
-import GetTrashedNotes.GetTrashedNotes as GetTrashedNotes
 import GraphQL.Engine
 import Http
+import Notes.CreateNote.CreateNote as CreateNote
+import Notes.DeleteNoteHard.DeleteNoteHard as DeleteNoteHard
+import Notes.DeleteNoteSoft.DeleteNoteSoft as DeleteNoteSoft
+import Notes.GetActiveNotes.GetActiveNotes as GetActiveNotes
+import Notes.GetTrashedNotes.GetTrashedNotes as GetTrashedNotes
+import Notes.RestoreNote.RestoreNote as RestoreNote
+import Notes.SearchNotes.SearchNotes as SearchNotes
+import Notes.UpdateNote.UpdateNote as UpdateNote
 import Pages.Shared.Status exposing (Status(..))
 import Ports.Supabase as Supabase
-import RestoreNote.RestoreNote as RestoreNote
-import SearchNotes.SearchNotes as SearchNotes
-import UpdateNote.UpdateNote as UpdateNote
 
 
 type alias Config =

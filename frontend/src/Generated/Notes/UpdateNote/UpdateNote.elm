@@ -1,7 +1,7 @@
-module UpdateNote.UpdateNote exposing (Input, Records, Response, UpdateNotesCollection, mutation)
+module Notes.UpdateNote.UpdateNote exposing (Input, Records, Response, UpdateNotesCollection, mutation)
 
 {-|
-This file is generated from ../supabase/queries/updateNote.gql using `elm-gql`
+This file is generated from ../supabase/queries/notes/updateNote.gql using `elm-gql`
 
 Please avoid modifying directly.
 

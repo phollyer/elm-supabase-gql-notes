@@ -11,11 +11,11 @@ import GraphQL.Engine
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Lib.GraphQL as GraphQL
+import Notes.UpdateNote.UpdateNote as UpdateNote
 import Pages.Shared.Error as Error exposing (Error)
 import Pages.Shared.Status as Status exposing (Status(..))
 import Ports.Supabase as Supabase
 import UI.FormElements as FE
-import UpdateNote.UpdateNote as UpdateNote
 
 
 type alias Model =

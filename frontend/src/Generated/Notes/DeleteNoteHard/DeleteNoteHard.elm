@@ -1,11 +1,11 @@
-module DeleteNoteHard.DeleteNoteHard exposing
+module Notes.DeleteNoteHard.DeleteNoteHard exposing
     ( Input
     , Response
     , mutation
     , DeleteFromNotesCollection
     )
 
-{-| This file is generated from ../supabase/queries/deleteNoteHard.gql using `elm-gql`
+{-| This file is generated from ../supabase/queries/notes/deleteNoteHard.gql using `elm-gql`
 
 Please avoid modifying directly.
 

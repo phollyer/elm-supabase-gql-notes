@@ -8,15 +8,15 @@ module Pages.Notes.DeleteSoft exposing
     )
 
 import Api
-import DeleteNoteSoft.DeleteNoteSoft as DeleteNoteSoft
 import GraphQL.Engine
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Lib.GraphQL as GraphQL
+import Notes.DeleteNoteSoft.DeleteNoteSoft as DeleteNoteSoft
+import Notes.RestoreNote.RestoreNote as RestoreNote
 import Pages.Shared.Error exposing (Error)
 import Pages.Shared.Status as Status exposing (Status(..))
 import Ports.Supabase as Supabase
-import RestoreNote.RestoreNote as RestoreNote
 import UI.FormElements as FE
 
 

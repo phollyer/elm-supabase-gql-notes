@@ -1,7 +1,7 @@
-module UpdateProfileAvatar.UpdateProfileAvatar exposing (Input, Response, UpdateProfilesCollection, mutation)
+module Profile.UpdateProfileAvatar.UpdateProfileAvatar exposing (Input, Response, UpdateProfilesCollection, mutation)
 
 {-|
-This file is generated from ../supabase/queries/updateProfileAvatar.gql using `elm-gql`
+This file is generated from ../supabase/queries/profile/updateProfileAvatar.gql using `elm-gql`
 
 Please avoid modifying directly.
 

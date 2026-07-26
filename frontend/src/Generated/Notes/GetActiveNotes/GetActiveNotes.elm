@@ -1,7 +1,7 @@
-module GetActiveNotes.GetActiveNotes exposing (Edges, Node, NotesCollection, Response, query)
+module Notes.GetActiveNotes.GetActiveNotes exposing (Edges, Node, NotesCollection, Response, query)
 
 {-|
-This file is generated from ../supabase/queries/getActiveNotes.gql using `elm-gql`
+This file is generated from ../supabase/queries/notes/getActiveNotes.gql using `elm-gql`
 
 Please avoid modifying directly.
 

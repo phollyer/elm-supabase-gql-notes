@@ -2,14 +2,13 @@ module Main exposing (main)
 
 import Api exposing (Datetime(..), Uuid(..))
 import Browser
-import CreateNote.CreateNote as CreateNote
-import GetProfile.GetProfile as GetProfile
 import GraphQL.Engine
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Http
 import Json.Decode as Decode
 import Lib.GraphQL as GraphQL
+import Notes.CreateNote.CreateNote as CreateNote
 import Pages.Auth.MagicLink as MagicLink
 import Pages.Auth.SignIn as SignIn
 import Pages.Auth.SignUp as SignUp
@@ -23,8 +22,9 @@ import Pages.Notes.Trash as Trash
 import Pages.Profile as Profile
 import Pages.Shared.Status exposing (Status(..))
 import Ports.Supabase as Supabase
+import Profile.GetProfile.GetProfile as GetProfile
+import Profile.UpdateProfileAvatar.UpdateProfileAvatar as UpdateProfileAvatar
 import UI.FormElements as FE
-import UpdateProfileAvatar.UpdateProfileAvatar as UpdateProfileAvatar
 
 
 main : Program Flags Model Msg

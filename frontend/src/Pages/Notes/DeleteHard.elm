@@ -7,11 +7,11 @@ module Pages.Notes.DeleteHard exposing
     , view
     )
 
-import DeleteNoteHard.DeleteNoteHard as DeleteNoteHard
 import GraphQL.Engine
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Lib.GraphQL as GraphQL
+import Notes.DeleteNoteHard.DeleteNoteHard as DeleteNoteHard
 import Pages.Shared.Error exposing (Error)
 import Pages.Shared.Status as Status exposing (Status(..))
 import Ports.Supabase as Supabase

@@ -7,7 +7,9 @@
         "dev": "vite",
         "build": "vite build",
         "preview": "vite preview",
-        "check": "elm make src/Main.elm --output=/tmp/elm-build.js"
+        "check": "elm make src/Main.elm --output=/tmp/elm-build.js",
+        "gql:generate": "elm-gql run src/Generated/Api/schema.json --namespace Api --queries ../supabase/queries --output-all src/Generated",
+        "gql:generate:force": "elm-gql run src/Generated/Api/schema.json --namespace Api --queries ../supabase/queries --output-all src/Generated --force"
     },
     "dependencies": {
         "@supabase/supabase-js": "^2.110.0"

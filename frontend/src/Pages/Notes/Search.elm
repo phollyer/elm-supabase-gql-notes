@@ -11,9 +11,9 @@ import GraphQL.Engine
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Lib.GraphQL as GraphQL
+import Notes.SearchNotes.SearchNotes as SearchNotes
 import Pages.Shared.Status as Status exposing (Status(..))
 import Ports.Supabase as Supabase
-import SearchNotes.SearchNotes as SearchNotes
 import UI.FormElements as FE
 
 

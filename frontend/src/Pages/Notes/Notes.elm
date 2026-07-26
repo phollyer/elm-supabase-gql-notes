@@ -8,11 +8,11 @@ module Pages.Notes.Notes exposing
     )
 
 import Api
-import GetActiveNotes.GetActiveNotes as GetActiveNotes
 import GraphQL.Engine
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Lib.GraphQL as GraphQL
+import Notes.GetActiveNotes.GetActiveNotes as GetActiveNotes
 import Pages.Shared.Status as Status exposing (Status(..))
 import Ports.Supabase as Supabase
 import UI.FormElements as FE

@@ -8,14 +8,14 @@ module Pages.Notes.Trash exposing
     )
 
 import Api exposing (Datetime(..), Uuid(..))
-import GetTrashedNotes.GetTrashedNotes as GetTrashedNotes
 import GraphQL.Engine
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Lib.GraphQL as GraphQL exposing (Config)
+import Notes.GetTrashedNotes.GetTrashedNotes as GetTrashedNotes
+import Notes.RestoreNote.RestoreNote as RestoreNote
 import Pages.Shared.Status exposing (Status(..))
 import Ports.Supabase as Supabase
-import RestoreNote.RestoreNote as RestoreNote
 import UI.FormElements as FE
 
 

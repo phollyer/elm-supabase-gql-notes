@@ -1,7 +1,7 @@
-module CreateNote.CreateNote exposing (Input, InsertIntoNotesCollection, Records, Response, mutation)
+module Notes.CreateNote.CreateNote exposing (Input, InsertIntoNotesCollection, Records, Response, mutation)
 
 {-|
-This file is generated from ../supabase/queries/createNote.gql using `elm-gql`
+This file is generated from ../supabase/queries/notes/createNote.gql using `elm-gql`
 
 Please avoid modifying directly.
 

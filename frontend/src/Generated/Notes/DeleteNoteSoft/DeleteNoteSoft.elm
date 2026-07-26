@@ -1,7 +1,7 @@
-module DeleteNoteSoft.DeleteNoteSoft exposing (Input, Records, Response, UpdateNotesCollection, mutation)
+module Notes.DeleteNoteSoft.DeleteNoteSoft exposing (Input, Records, Response, UpdateNotesCollection, mutation)
 
 {-|
-This file is generated from ../supabase/queries/deleteNoteSoft.gql using `elm-gql`
+This file is generated from ../supabase/queries/notes/deleteNoteSoft.gql using `elm-gql`
 
 Please avoid modifying directly.
 
