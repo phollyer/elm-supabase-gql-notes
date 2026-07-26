@@ -27,41 +27,38 @@ const emit = (event) => {
 }
 
 const run = async (message) => {
-    const requestId = message.requestId || `req-${Date.now()}`
-
     switch (message.type) {
         case 'initialize-session':
-            emit(await initializeSession(requestId))
+            emit(await initializeSession())
             return
 
         case 'refresh-session':
-            emit(await refreshSession(requestId))
+            emit(await refreshSession())
             return
 
         case 'sign-up-password':
-            emit(await signUpWithPassword(requestId, message.email, message.password))
+            emit(await signUpWithPassword(message.email, message.password))
             return
 
         case 'sign-in-password':
-            emit(await signInWithPassword(requestId, message.email, message.password))
+            emit(await signInWithPassword(message.email, message.password))
             return
 
         case 'sign-in-magic-link':
-            emit(await signInWithMagicLink(requestId, message.email))
+            emit(await signInWithMagicLink(message.email))
             return
 
         case 'sign-out':
-            emit(await signOut(requestId))
+            emit(await signOut())
             return
 
         case 'upload-avatar':
-            emit(await uploadAvatar(requestId))
+            emit(await uploadAvatar())
             return
 
         default:
             emit({
                 type: 'error',
-                requestId,
                 message: `Unknown command type: ${message.type}`
             })
     }
@@ -71,7 +68,6 @@ app.ports.supabaseOut.subscribe((value) => {
     run(value).catch((error) => {
         emit({
             type: 'error',
-            requestId: value.requestId || `req-${Date.now()}`,
             message: error?.message || 'Unexpected bridge error'
         })
     })

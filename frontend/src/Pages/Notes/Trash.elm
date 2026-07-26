@@ -23,7 +23,6 @@ type alias Model =
     { config : Config
     , accessToken : Maybe String
     , userId : Maybe String
-    , requestId : Int
     , notes : List Supabase.Note
     , status : Maybe Status
     }
@@ -34,7 +33,6 @@ init config accessToken userId =
     { config = config
     , accessToken = accessToken
     , userId = userId
-    , requestId = 0
     , notes = []
     , status = Nothing
     }
@@ -45,9 +43,7 @@ fetch model =
     case model.accessToken of
         Nothing ->
             ( { model | status = Just (Error "Access token is missing.") }
-            , GraphQL.refreshSessionCmd <|
-                "refresh-session-"
-                    ++ String.fromInt model.requestId
+            , GraphQL.refreshSessionCmd
             )
 
         Just accessToken ->
@@ -69,9 +65,7 @@ update msg model =
             case model.accessToken of
                 Nothing ->
                     ( { model | status = Just (Error "Access token is missing.") }
-                    , GraphQL.refreshSessionCmd <|
-                        "refresh-session-"
-                            ++ String.fromInt model.requestId
+                    , GraphQL.refreshSessionCmd
                     )
 
                 Just accessToken ->

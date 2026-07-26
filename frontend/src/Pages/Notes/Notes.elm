@@ -21,7 +21,6 @@ import UI.FormElements as FE
 type alias Model =
     { notes : List Supabase.Note
     , status : Maybe Status
-    , requestId : Int
     , accessToken : Maybe String
     , userId : Maybe String
     , config : GraphQL.Config
@@ -32,7 +31,6 @@ init : GraphQL.Config -> Maybe String -> Maybe String -> Model
 init config accessToken userId =
     { notes = []
     , status = Nothing
-    , requestId = 0
     , accessToken = accessToken
     , userId = userId
     , config = config
@@ -43,17 +41,8 @@ fetch : Model -> ( Model, Cmd Msg )
 fetch model =
     case model.accessToken of
         Nothing ->
-            let
-                nextRequestId =
-                    model.requestId + 1
-            in
-            ( { model
-                | status = Just (Error "No access token available for initializing notes")
-                , requestId = nextRequestId
-              }
-            , GraphQL.refreshSessionCmd <|
-                "refresh-session-"
-                    ++ String.fromInt nextRequestId
+            ( { model | status = Just (Error "No access token available for initializing notes") }
+            , GraphQL.refreshSessionCmd
             )
 
         Just accessToken ->

@@ -54,7 +54,6 @@ type alias Model =
     , profilePage : Profile.Model
     , status : Maybe Status
     , state : State
-    , nextId : Int
     }
 
 
@@ -93,9 +92,8 @@ init flags =
       , profilePage = Profile.init config Nothing Nothing
       , status = Just (Info "Checking session...")
       , state = Start
-      , nextId = 1
       }
-    , Supabase.sendCommand (Supabase.InitializeSession { requestId = "init-0" })
+    , Supabase.sendCommand Supabase.InitializeSession
     )
 
 
@@ -155,11 +153,6 @@ graphqlHeaders publishableKey accessToken =
     ]
 
 
-nextRequestId : Model -> String
-nextRequestId model =
-    "req-" ++ String.fromInt model.nextId
-
-
 updateProfileAvatarPathCmd : Config -> String -> String -> String -> Cmd Msg
 updateProfileAvatarPathCmd config accessToken userId avatarPath =
     Cmd.map GraphqlAvatarPathUpdated <|
@@ -176,9 +169,9 @@ updateProfileAvatarPathCmd config accessToken userId avatarPath =
             }
 
 
-refreshSessionCmd : Model -> Cmd Msg
-refreshSessionCmd model =
-    Supabase.sendCommand (Supabase.RefreshSession { requestId = nextRequestId model })
+refreshSessionCmd : Cmd Msg
+refreshSessionCmd =
+    Supabase.sendCommand Supabase.RefreshSession
 
 
 subscriptions : Model -> Sub Msg
@@ -402,7 +395,7 @@ update msg model =
 
         AttemptSignOut ->
             ( { model | status = Just (Info "Signing out...") }
-            , Supabase.sendCommand (Supabase.SignOut { requestId = nextRequestId model })
+            , Supabase.sendCommand Supabase.SignOut
             )
 
         GraphqlAvatarPathUpdated result ->
@@ -451,7 +444,7 @@ applyEvent event model =
             , Cmd.none
             )
 
-        Supabase.SessionMissing _ ->
+        Supabase.SessionMissing ->
             ( { model
                 | accessToken = Nothing
                 , userId = Nothing
@@ -473,7 +466,7 @@ applyEvent event model =
 
                 _ ->
                     ( { model | status = Just (Error "Session info missing. Re-checking session...") }
-                    , refreshSessionCmd model
+                    , refreshSessionCmd
                     )
 
         Supabase.ErrorRaised payload ->
@@ -524,7 +517,7 @@ handleGraphqlFailure : String -> GraphQL.Engine.Error -> Model -> ( Model, Cmd M
 handleGraphqlFailure prefix error model =
     if isGraphqlAuthError error then
         ( { model | status = Just (Error (prefix ++ ": session expired, refreshing...")) }
-        , refreshSessionCmd model
+        , refreshSessionCmd
         )
 
     else

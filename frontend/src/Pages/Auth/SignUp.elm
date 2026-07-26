@@ -17,7 +17,6 @@ type alias Model =
     , passwordError : Maybe Error
     , passwordConfirmError : Maybe Error
     , status : Maybe Status
-    , requestId : Int
     }
 
 
@@ -30,7 +29,6 @@ init =
     , passwordError = Nothing
     , passwordConfirmError = Nothing
     , status = Nothing
-    , requestId = 0
     }
 
 
@@ -66,18 +64,10 @@ update msg model =
             in
             case ( emailError, passwordError, passwordConfirmError ) of
                 ( Nothing, Nothing, Nothing ) ->
-                    let
-                        newRequestId =
-                            model.requestId + 1
-                    in
-                    ( { model
-                        | status = Just (Status.Info "Signing up...")
-                        , requestId = newRequestId
-                      }
+                    ( { model | status = Just (Status.Info "Signing up...") }
                     , Supabase.sendCommand
                         (Supabase.SignUpWithPassword
-                            { requestId = "sign-up-password-" ++ String.fromInt newRequestId
-                            , email = model.email
+                            { email = model.email
                             , password = model.password
                             }
                         )

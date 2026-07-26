@@ -24,7 +24,6 @@ type alias Model =
     { config : GraphQL.Config
     , accessToken : Maybe String
     , userId : Maybe String
-    , requestId : Int
     , status : Maybe Status
     , email : String
     , displayName : String
@@ -37,7 +36,6 @@ init config accessToken userId =
     { config = config
     , accessToken = accessToken
     , userId = userId
-    , requestId = 0
     , status = Nothing
     , email = ""
     , displayName = ""
@@ -65,16 +63,12 @@ fetch model =
     case ( model.accessToken, model.userId ) of
         ( Nothing, _ ) ->
             ( { model | email = "Access token is missing." }
-            , GraphQL.refreshSessionCmd <|
-                "refresh-session-"
-                    ++ String.fromInt 0
+            , GraphQL.refreshSessionCmd
             )
 
         ( Just _, Nothing ) ->
             ( { model | email = "User ID is missing." }
-            , GraphQL.refreshSessionCmd <|
-                "refresh-session-"
-                    ++ String.fromInt 0
+            , GraphQL.refreshSessionCmd
             )
 
         ( Just accessToken, Just userId ) ->
@@ -92,7 +86,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         UploadAvatarClicked ->
-            ( model, Supabase.sendCommand (Supabase.UploadAvatar { requestId = "upload-avatar" }) )
+            ( model, Supabase.sendCommand Supabase.UploadAvatar )
 
         GraphqlProfileLoaded result ->
             case result of

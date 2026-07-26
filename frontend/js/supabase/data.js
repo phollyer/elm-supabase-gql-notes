@@ -2,25 +2,23 @@ import { supabase } from './client.js'
 
 const MAX_AVATAR_BYTES = 1048576
 
-const toError = (requestId, error) => ({
+const toError = (error) => ({
     type: 'error',
-    requestId,
     message: error?.message || 'Unknown data error'
 })
 
 
 
-export const uploadAvatar = async (requestId) => {
+export const uploadAvatar = async () => {
     const { data: { user }, error: userError } = await supabase.auth.getUser()
 
     if (userError) {
-        return toError(requestId, userError)
+        return toError(userError)
     }
 
     if (!user) {
         return {
             type: 'error',
-            requestId,
             message: 'You must be signed in to upload an avatar.'
         }
     }
@@ -36,7 +34,6 @@ export const uploadAvatar = async (requestId) => {
             if (!file) {
                 resolve({
                     type: 'error',
-                    requestId,
                     message: 'No file selected.'
                 })
                 return
@@ -45,7 +42,6 @@ export const uploadAvatar = async (requestId) => {
             if (!file.type.startsWith('image/')) {
                 resolve({
                     type: 'error',
-                    requestId,
                     message: 'Avatar must be an image file.'
                 })
                 return
@@ -54,7 +50,6 @@ export const uploadAvatar = async (requestId) => {
             if (file.size > MAX_AVATAR_BYTES) {
                 resolve({
                     type: 'error',
-                    requestId,
                     message: 'Avatar must be 1 MB or smaller.'
                 })
                 return
@@ -69,7 +64,7 @@ export const uploadAvatar = async (requestId) => {
                 })
 
             if (error) {
-                resolve(toError(requestId, error))
+                resolve(toError(error))
                 return
             }
 
@@ -78,13 +73,12 @@ export const uploadAvatar = async (requestId) => {
                 .getPublicUrl(fileName)
 
             if (publicUrlError) {
-                resolve(toError(requestId, publicUrlError))
+                resolve(toError(publicUrlError))
                 return
             }
 
             resolve({
                 type: 'avatar-uploaded',
-                requestId,
                 avatarUrl: publicUrlData.publicUrl,
                 avatarPath: fileName
             })

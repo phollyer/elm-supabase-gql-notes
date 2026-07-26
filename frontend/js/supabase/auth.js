@@ -1,75 +1,71 @@
 import { supabase } from './client.js'
 
-const toError = (requestId, error) => ({
+const toError = (error) => ({
     type: 'error',
-    requestId,
     message: error?.message || 'Unknown auth error'
 })
 
-export const initializeSession = async (requestId) => {
+export const initializeSession = async () => {
     const { data, error } = await supabase.auth.getSession()
     if (error) {
-        return toError(requestId, error)
+        return toError(error)
     }
 
     const user = data?.session?.user
     if (!user) {
-        return { type: 'session-missing', requestId }
+        return { type: 'session-missing' }
     }
 
     return {
         type: 'session-ready',
         accessToken: data.session.access_token,
-        requestId,
         userId: user.id,
         email: user.email || ''
     }
 }
 
-export const refreshSession = async (requestId) => {
+export const refreshSession = async () => {
     const { data, error } = await supabase.auth.refreshSession()
     if (error) {
-        return toError(requestId, error)
+        return toError(error)
     }
 
     const user = data?.session?.user
     if (!user) {
-        return { type: 'session-missing', requestId }
+        return { type: 'session-missing' }
     }
 
     return {
         type: 'session-ready',
         accessToken: data.session.access_token,
-        requestId,
         userId: user.id,
         email: user.email || ''
     }
 }
 
-export const signInWithPassword = async (requestId, email, password) => {
+export const signInWithPassword = async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-        return toError(requestId, error)
+        return toError(error)
     }
 
     const user = data?.user
     if (!user) {
-        return { type: 'session-missing', requestId }
+        return { type: 'session-missing' }
     }
 
     return {
         type: 'session-ready',
         accessToken: data.session.access_token,
-        requestId,
         userId: user.id,
         email: user.email || ''
     }
 }
 
-export const signUpWithPassword = async (requestId, email, password) => {
+export const signUpWithPassword = async (email, password) => {
     const { data, error } = await supabase.auth.signUp({ email, password })
     if (error) {
-        return toError(requestId, error)
+        return toError(error)
     }
 
     const user = data?.user
@@ -78,7 +74,6 @@ export const signUpWithPassword = async (requestId, email, password) => {
     if (!user) {
         return {
             type: 'error',
-            requestId,
             message: 'Sign up did not return a user. Please try again.'
         }
     }
@@ -86,7 +81,6 @@ export const signUpWithPassword = async (requestId, email, password) => {
     if (!session) {
         return {
             type: 'error',
-            requestId,
             message: 'Account created. Check your email to confirm, then sign in.'
         }
     }
@@ -94,13 +88,12 @@ export const signUpWithPassword = async (requestId, email, password) => {
     return {
         type: 'session-ready',
         accessToken: session.access_token,
-        requestId,
         userId: user.id,
         email: user.email || ''
     }
 }
 
-export const signInWithMagicLink = async (requestId, email) => {
+export const signInWithMagicLink = async (email) => {
     const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
@@ -109,24 +102,22 @@ export const signInWithMagicLink = async (requestId, email) => {
     })
 
     if (error) {
-        return toError(requestId, error)
+        return toError(error)
     }
 
     return {
         type: 'error',
-        requestId,
         message: 'Magic link sent. Open your email to continue.'
     }
 }
 
-export const signOut = async (requestId) => {
+export const signOut = async () => {
     const { error } = await supabase.auth.signOut()
     if (error) {
-        return toError(requestId, error)
+        return toError(error)
     }
 
     return {
-        type: 'session-missing',
-        requestId
+        type: 'session-missing'
     }
 }

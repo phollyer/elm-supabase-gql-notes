@@ -22,7 +22,6 @@ type alias Model =
     { note : Maybe Supabase.Note
     , status : Maybe Status
     , state : State
-    , requestId : Int
     , accessToken : Maybe String
     , userId : Maybe String
     , config : GraphQL.Config
@@ -34,7 +33,6 @@ init config accessToken userId =
     { note = Nothing
     , status = Nothing
     , state = Ready
-    , requestId = 0
     , accessToken = accessToken
     , userId = userId
     , config = config
@@ -70,9 +68,7 @@ update msg model =
 
                 ( Nothing, _ ) ->
                     ( { model | status = Just (Error "Session info missing. Re-checking session...") }
-                    , GraphQL.refreshSessionCmd <|
-                        "refresh-session-"
-                            ++ String.fromInt model.requestId
+                    , GraphQL.refreshSessionCmd
                     )
 
                 ( _, Nothing ) ->

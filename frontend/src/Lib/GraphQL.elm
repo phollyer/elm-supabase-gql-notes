@@ -83,11 +83,11 @@ formatError error =
                         ++ String.join ", " (List.map .message errors)
 
 
-handleFailure : String -> GraphQL.Engine.Error -> { m | status : Maybe Status, requestId : Int } -> ( { m | status : Maybe Status, requestId : Int }, Cmd msg )
+handleFailure : String -> GraphQL.Engine.Error -> { m | status : Maybe Status } -> ( { m | status : Maybe Status }, Cmd msg )
 handleFailure prefix error model =
     if isAuthError error then
         ( { model | status = Just (Error (prefix ++ ": session expired, refreshing...")) }
-        , refreshSessionCmd <| "refresh-session-" ++ String.fromInt model.requestId
+        , refreshSessionCmd
         )
 
     else
@@ -117,9 +117,9 @@ toSupabaseNote { id, title, body, createdAt, updatedAt, deletedAt } =
     }
 
 
-refreshSessionCmd : String -> Cmd msg
-refreshSessionCmd requestId =
-    Supabase.sendCommand (Supabase.RefreshSession { requestId = requestId })
+refreshSessionCmd : Cmd msg
+refreshSessionCmd =
+    Supabase.sendCommand Supabase.RefreshSession
 
 
 fetchProfileCmd : Config -> String -> String -> (Result GraphQL.Engine.Error GetProfile.Response -> msg) -> Cmd msg

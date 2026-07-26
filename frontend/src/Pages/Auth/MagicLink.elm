@@ -12,7 +12,6 @@ type alias Model =
     { email : String
     , emailError : Maybe Error
     , status : Maybe Status
-    , requestId : Int
     }
 
 
@@ -21,7 +20,6 @@ init =
     { email = ""
     , emailError = Nothing
     , status = Just (Info "Use the magic link to sign in via email")
-    , requestId = 0
     }
 
 
@@ -47,19 +45,10 @@ update msg model =
                     )
 
                 Nothing ->
-                    let
-                        newRequestId =
-                            model.requestId + 1
-                    in
-                    ( { model
-                        | status = Just (Status.Info "Sending magic link...")
-                        , requestId = newRequestId
-                      }
+                    ( { model | status = Just (Status.Info "Sending magic link...") }
                     , Supabase.sendCommand
                         (Supabase.SignInWithMagicLink
-                            { requestId = "magic-link-sign-in-" ++ String.fromInt newRequestId
-                            , email = model.email
-                            }
+                            { email = model.email }
                         )
                     )
 

@@ -24,7 +24,6 @@ type alias Model =
     , body : String
     , titleError : Maybe Error
     , status : Maybe Status
-    , requestId : Int
     , accessToken : Maybe String
     , userId : Maybe String
     , config : GraphQL.Config
@@ -38,7 +37,6 @@ init config accessToken userId =
     , body = ""
     , titleError = Nothing
     , status = Nothing
-    , requestId = 0
     , accessToken = accessToken
     , userId = userId
     , config = config
@@ -90,13 +88,8 @@ update msg model =
                             )
 
                         _ ->
-                            let
-                                newRequestId =
-                                    model.requestId + 1
-                            in
                             ( { model | status = Just (Error "Session info missing. Re-checking session...") }
-                            , GraphQL.refreshSessionCmd <|
-                                ("refresh-session-" ++ String.fromInt newRequestId)
+                            , GraphQL.refreshSessionCmd
                             )
 
         GraphqlNoteCreated result ->

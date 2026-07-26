@@ -13,20 +13,20 @@ import Json.Encode as Encode
 
 
 type Command
-    = InitializeSession { requestId : String }
-    | RefreshSession { requestId : String }
-    | SignInWithPassword { requestId : String, email : String, password : String }
-    | SignInWithMagicLink { requestId : String, email : String }
-    | SignUpWithPassword { requestId : String, email : String, password : String }
-    | SignOut { requestId : String }
-    | UploadAvatar { requestId : String }
+    = InitializeSession
+    | RefreshSession
+    | SignInWithPassword { email : String, password : String }
+    | SignInWithMagicLink { email : String }
+    | SignUpWithPassword { email : String, password : String }
+    | SignOut
+    | UploadAvatar
 
 
 type Event
-    = SessionReady { requestId : String, accessToken : String, userId : String, email : String }
-    | SessionMissing { requestId : String }
-    | AvatarUploaded { requestId : String, avatarUrl : String, avatarPath : String }
-    | ErrorRaised { requestId : String, message : String }
+    = SessionReady { accessToken : String, userId : String, email : String }
+    | SessionMissing
+    | AvatarUploaded { avatarUrl : String, avatarPath : String }
+    | ErrorRaised { message : String }
 
 
 type alias Note =
@@ -53,22 +53,17 @@ sendCommand command =
 encodeCommand : Command -> Encode.Value
 encodeCommand command =
     case command of
-        InitializeSession payload ->
+        InitializeSession ->
             Encode.object
-                [ ( "type", Encode.string "initialize-session" )
-                , ( "requestId", Encode.string payload.requestId )
-                ]
+                [ ( "type", Encode.string "initialize-session" ) ]
 
-        RefreshSession payload ->
+        RefreshSession ->
             Encode.object
-                [ ( "type", Encode.string "refresh-session" )
-                , ( "requestId", Encode.string payload.requestId )
-                ]
+                [ ( "type", Encode.string "refresh-session" ) ]
 
         SignUpWithPassword payload ->
             Encode.object
                 [ ( "type", Encode.string "sign-up-password" )
-                , ( "requestId", Encode.string payload.requestId )
                 , ( "email", Encode.string payload.email )
                 , ( "password", Encode.string payload.password )
                 ]
@@ -76,7 +71,6 @@ encodeCommand command =
         SignInWithPassword payload ->
             Encode.object
                 [ ( "type", Encode.string "sign-in-password" )
-                , ( "requestId", Encode.string payload.requestId )
                 , ( "email", Encode.string payload.email )
                 , ( "password", Encode.string payload.password )
                 ]
@@ -84,21 +78,16 @@ encodeCommand command =
         SignInWithMagicLink payload ->
             Encode.object
                 [ ( "type", Encode.string "sign-in-magic-link" )
-                , ( "requestId", Encode.string payload.requestId )
                 , ( "email", Encode.string payload.email )
                 ]
 
-        SignOut payload ->
+        SignOut ->
             Encode.object
-                [ ( "type", Encode.string "sign-out" )
-                , ( "requestId", Encode.string payload.requestId )
-                ]
+                [ ( "type", Encode.string "sign-out" ) ]
 
-        UploadAvatar payload ->
+        UploadAvatar ->
             Encode.object
-                [ ( "type", Encode.string "upload-avatar" )
-                , ( "requestId", Encode.string payload.requestId )
-                ]
+                [ ( "type", Encode.string "upload-avatar" ) ]
 
 
 commandDecoder : Decoder Event
@@ -116,31 +105,26 @@ decodeByType : String -> Decoder Event
 decodeByType eventType =
     case eventType of
         "session-ready" ->
-            Decode.map4
-                (\requestId accessToken userId email ->
-                    SessionReady { requestId = requestId, accessToken = accessToken, userId = userId, email = email }
+            Decode.map3
+                (\accessToken userId email ->
+                    SessionReady { accessToken = accessToken, userId = userId, email = email }
                 )
-                (Decode.field "requestId" Decode.string)
                 (Decode.field "accessToken" Decode.string)
                 (Decode.field "userId" Decode.string)
                 (Decode.field "email" Decode.string)
 
         "session-missing" ->
-            Decode.map
-                (\requestId -> SessionMissing { requestId = requestId })
-                (Decode.field "requestId" Decode.string)
+            Decode.succeed SessionMissing
 
         "avatar-uploaded" ->
-            Decode.map3
-                (\requestId avatarUrl avatarPath -> AvatarUploaded { requestId = requestId, avatarUrl = avatarUrl, avatarPath = avatarPath })
-                (Decode.field "requestId" Decode.string)
+            Decode.map2
+                (\avatarUrl avatarPath -> AvatarUploaded { avatarUrl = avatarUrl, avatarPath = avatarPath })
                 (Decode.field "avatarUrl" Decode.string)
                 (Decode.field "avatarPath" Decode.string)
 
         "error" ->
-            Decode.map2
-                (\requestId message -> ErrorRaised { requestId = requestId, message = message })
-                (Decode.field "requestId" Decode.string)
+            Decode.map
+                (\message -> ErrorRaised { message = message })
                 (Decode.field "message" Decode.string)
 
         _ ->

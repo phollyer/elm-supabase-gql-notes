@@ -21,7 +21,6 @@ type alias Model =
     { searchTerm : String
     , searchResults : List Supabase.Note
     , status : Maybe Status
-    , requestId : Int
     , accessToken : Maybe String
     , userId : Maybe String
     , config : GraphQL.Config
@@ -33,7 +32,6 @@ init config accessToken userId =
     { searchTerm = ""
     , searchResults = []
     , status = Nothing
-    , requestId = 0
     , accessToken = accessToken
     , userId = userId
     , config = config
@@ -92,9 +90,7 @@ update msg model =
 
                 Nothing ->
                     ( { model | status = Just (Error "No access token. Re-checking session...") }
-                    , GraphQL.refreshSessionCmd <|
-                        "refresh-session-"
-                            ++ String.fromInt model.requestId
+                    , GraphQL.refreshSessionCmd
                     )
 
         GraphQLSearchNotesLoaded (Ok response) ->
