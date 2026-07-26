@@ -52,6 +52,7 @@ type alias Model =
     , searchNotesPage : SearchNotes.Model
     , trashPage : Trash.Model
     , profilePage : Profile.Model
+    , status : Maybe Status
     , state : State
     , nextId : Int
     }
@@ -89,6 +90,7 @@ init flags =
       , searchNotesPage = SearchNotes.init config Nothing Nothing
       , trashPage = Trash.init config Nothing Nothing
       , profilePage = Profile.init
+      , status = Just (Info "Checking session...")
       , state = Start
       , nextId = 1
       }
