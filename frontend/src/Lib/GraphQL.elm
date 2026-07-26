@@ -2,6 +2,7 @@ module Lib.GraphQL exposing
     ( Config
     , createNoteCmd
     , fetchNotesCmd
+    , fetchProfileCmd
     , fetchTrashCmd
     , formatError
     , getActiveNotesToSupabaseNotes
@@ -28,6 +29,7 @@ import Notes.SearchNotes.SearchNotes as SearchNotes
 import Notes.UpdateNote.UpdateNote as UpdateNote
 import Pages.Shared.Status exposing (Status(..))
 import Ports.Supabase as Supabase
+import Profile.GetProfile.GetProfile as GetProfile
 
 
 type alias Config =
@@ -118,6 +120,20 @@ toSupabaseNote { id, title, body, createdAt, updatedAt, deletedAt } =
 refreshSessionCmd : String -> Cmd msg
 refreshSessionCmd requestId =
     Supabase.sendCommand (Supabase.RefreshSession { requestId = requestId })
+
+
+fetchProfileCmd : Config -> String -> String -> (Result GraphQL.Engine.Error GetProfile.Response -> msg) -> Cmd msg
+fetchProfileCmd config accessToken userId graphqlProfileLoaded =
+    Cmd.map graphqlProfileLoaded <|
+        Api.query
+            (GetProfile.query
+                { id = Uuid userId }
+            )
+            { headers = headers config.publishableKey accessToken
+            , url = config.graphqlUrl
+            , timeout = Nothing
+            , tracker = Nothing
+            }
 
 
 fetchNotesCmd : Config -> String -> (Result GraphQL.Engine.Error GetActiveNotes.Response -> msg) -> Cmd msg

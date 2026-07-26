@@ -8,7 +8,6 @@ import Html.Attributes exposing (..)
 import Http
 import Json.Decode as Decode
 import Lib.GraphQL as GraphQL
-import Notes.CreateNote.CreateNote as CreateNote
 import Pages.Auth.MagicLink as MagicLink
 import Pages.Auth.SignIn as SignIn
 import Pages.Auth.SignUp as SignUp
@@ -19,10 +18,10 @@ import Pages.Notes.Edit as EditNote
 import Pages.Notes.Notes as Notes
 import Pages.Notes.Search as SearchNotes
 import Pages.Notes.Trash as Trash
-import Pages.Profile as Profile
+import Pages.Profile.Profile as Profile
 import Pages.Shared.Status exposing (Status(..))
+import Pages.Start as Start
 import Ports.Supabase as Supabase
-import Profile.GetProfile.GetProfile as GetProfile
 import Profile.UpdateProfileAvatar.UpdateProfileAvatar as UpdateProfileAvatar
 import UI.FormElements as FE
 
@@ -44,6 +43,7 @@ type alias Model =
     , magicLinkPage : MagicLink.Model
     , signInPage : SignIn.Model
     , signUpPage : SignUp.Model
+    , startPage : Start.Model
     , createNotePage : CreateNote.Model
     , deleteNoteHardPage : DeleteNoteHard.Model
     , deleteNoteSoftPage : DeleteNoteSoft.Model
@@ -82,6 +82,7 @@ init flags =
       , magicLinkPage = MagicLink.init
       , signInPage = SignIn.init
       , signUpPage = SignUp.init
+      , startPage = Start.init
       , createNotePage = CreateNote.init config Nothing Nothing
       , deleteNoteHardPage = DeleteNoteHard.init config Nothing Nothing
       , deleteNoteSoftPage = DeleteNoteSoft.init config Nothing Nothing
@@ -89,7 +90,7 @@ init flags =
       , notesPage = Notes.init config Nothing Nothing
       , searchNotesPage = SearchNotes.init config Nothing Nothing
       , trashPage = Trash.init config Nothing Nothing
-      , profilePage = Profile.init
+      , profilePage = Profile.init config Nothing Nothing
       , status = Just (Info "Checking session...")
       , state = Start
       , nextId = 1
@@ -132,7 +133,6 @@ type Msg
     | NotesMsg Notes.Msg
     | AttemptSignOut
     | GotoTrash
-    | AttemptFetchProfile
     | GotoStart
     | GotoSignUp
     | GotoSignIn
@@ -145,7 +145,6 @@ type Msg
     | GotoTrashNote Supabase.Note
     | GotoProfilePage
     | GraphqlAvatarPathUpdated (Result GraphQL.Engine.Error UpdateProfileAvatar.Response)
-    | GraphqlProfileLoaded (Result GraphQL.Engine.Error GetProfile.Response)
     | SupabaseEventReceived Decode.Value
 
 
@@ -159,20 +158,6 @@ graphqlHeaders publishableKey accessToken =
 nextRequestId : Model -> String
 nextRequestId model =
     "req-" ++ String.fromInt model.nextId
-
-
-fetchProfileCmd : Config -> String -> String -> Cmd Msg
-fetchProfileCmd config accessToken userId =
-    Cmd.map GraphqlProfileLoaded <|
-        Api.query
-            (GetProfile.query
-                { id = Uuid userId }
-            )
-            { headers = graphqlHeaders config.publishableKey accessToken
-            , url = config.graphqlUrl
-            , timeout = Nothing
-            , tracker = Nothing
-            }
 
 
 updateProfileAvatarPathCmd : Config -> String -> String -> String -> Cmd Msg
@@ -304,10 +289,7 @@ update msg model =
             )
 
         GotoStart ->
-            ( { model
-                | status = Just (Info "Please sign up or sign in")
-                , state = Start
-              }
+            ( { model | state = Start }
             , Cmd.none
             )
 
@@ -406,34 +388,22 @@ update msg model =
             )
 
         GotoProfilePage ->
+            let
+                ( updatedProfileModel, profileCmd ) =
+                    Profile.init model.config model.accessToken model.userId
+                        |> Profile.fetch
+            in
             ( { model
-                | status = Nothing
-                , state = SignedIn ViewingProfile
+                | state = SignedIn ViewingProfile
+                , profilePage = updatedProfileModel
               }
-            , case ( model.accessToken, model.userId ) of
-                ( Just accessToken, Just userId ) ->
-                    fetchProfileCmd model.config accessToken userId
-
-                _ ->
-                    Cmd.none
+            , Cmd.map ProfileMsg profileCmd
             )
 
         AttemptSignOut ->
             ( { model | status = Just (Info "Signing out...") }
             , Supabase.sendCommand (Supabase.SignOut { requestId = nextRequestId model })
             )
-
-        AttemptFetchProfile ->
-            case ( model.accessToken, model.userId ) of
-                ( Just accessToken, Just userId ) ->
-                    ( { model | status = Just (Info "Loading profile...") }
-                    , fetchProfileCmd model.config accessToken userId
-                    )
-
-                _ ->
-                    ( { model | status = Just (Error "Session info missing. Re-checking session...") }
-                    , refreshSessionCmd model
-                    )
 
         GraphqlAvatarPathUpdated result ->
             case result of
@@ -458,28 +428,6 @@ update msg model =
 
                 Err error ->
                     handleGraphqlFailure "GraphQL avatar path update failed" error model
-
-        GraphqlProfileLoaded result ->
-            case result of
-                Ok response ->
-                    case response.profilesByPk of
-                        Just profile ->
-                            ( { model
-                                | profilePage =
-                                    model.profilePage
-                                        |> Profile.setEmailAddress profile.email
-                                        |> Profile.setDisplayName (Maybe.withDefault "" profile.displayName)
-                                        |> Profile.setAvatarUrl (Maybe.map (\path -> "http://localhost:54321/storage/v1/object/public/avatar/" ++ path) profile.avatarPath)
-                                , status = Just (Success "Profile loaded")
-                              }
-                            , Cmd.none
-                            )
-
-                        Nothing ->
-                            ( { model | status = Just (Error "Profile not found") }, Cmd.none )
-
-                Err error ->
-                    handleGraphqlFailure "GraphQL profile load failed" error model
 
         SupabaseEventReceived payload ->
             case Decode.decodeValue Supabase.decodeEvent payload of
@@ -626,12 +574,12 @@ view model =
          ]
             ++ (case model.state of
                     Start ->
-                        [ FE.buttons
+                        Start.view
                             [ FE.gotoButton "Sign up" GotoSignUp
                             , FE.gotoButton "Sign in" GotoSignIn
                             , FE.gotoButton "Magic link" GotoMagicLink
                             ]
-                        ]
+                            model.startPage
 
                     SignUp ->
                         SignUp.view

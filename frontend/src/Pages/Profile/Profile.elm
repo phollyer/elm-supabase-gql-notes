@@ -1,6 +1,7 @@
-module Pages.Profile exposing
+module Pages.Profile.Profile exposing
     ( Model
     , Msg
+    , fetch
     , init
     , setAvatarUrl
     , setDisplayName
@@ -9,22 +10,36 @@ module Pages.Profile exposing
     , view
     )
 
+import GraphQL.Engine
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Lib.GraphQL as GraphQL
+import Pages.Shared.Status exposing (Status(..))
 import Ports.Supabase as Supabase
+import Profile.GetProfile.GetProfile as GetProfile
 import UI.FormElements exposing (uploadButton)
 
 
 type alias Model =
-    { email : String
+    { config : GraphQL.Config
+    , accessToken : Maybe String
+    , userId : Maybe String
+    , requestId : Int
+    , status : Maybe Status
+    , email : String
     , displayName : String
     , avatarUrl : Maybe String
     }
 
 
-init : Model
-init =
-    { email = ""
+init : GraphQL.Config -> Maybe String -> Maybe String -> Model
+init config accessToken userId =
+    { config = config
+    , accessToken = accessToken
+    , userId = userId
+    , requestId = 0
+    , status = Nothing
+    , email = ""
     , displayName = ""
     , avatarUrl = Nothing
     }
@@ -45,8 +60,32 @@ setAvatarUrl avatarUrl model =
     { model | avatarUrl = avatarUrl }
 
 
+fetch : Model -> ( Model, Cmd Msg )
+fetch model =
+    case ( model.accessToken, model.userId ) of
+        ( Nothing, _ ) ->
+            ( { model | email = "Access token is missing." }
+            , GraphQL.refreshSessionCmd <|
+                "refresh-session-"
+                    ++ String.fromInt 0
+            )
+
+        ( Just _, Nothing ) ->
+            ( { model | email = "User ID is missing." }
+            , GraphQL.refreshSessionCmd <|
+                "refresh-session-"
+                    ++ String.fromInt 0
+            )
+
+        ( Just accessToken, Just userId ) ->
+            ( model
+            , GraphQL.fetchProfileCmd model.config accessToken userId GraphqlProfileLoaded
+            )
+
+
 type Msg
     = UploadAvatarClicked
+    | GraphqlProfileLoaded (Result GraphQL.Engine.Error GetProfile.Response)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -54,6 +93,26 @@ update msg model =
     case msg of
         UploadAvatarClicked ->
             ( model, Supabase.sendCommand (Supabase.UploadAvatar { requestId = "upload-avatar" }) )
+
+        GraphqlProfileLoaded result ->
+            case result of
+                Ok response ->
+                    case response.profilesByPk of
+                        Just profile ->
+                            ( { model
+                                | email = profile.email
+                                , displayName = Maybe.withDefault "" profile.displayName
+                                , avatarUrl = Maybe.map (\path -> "http://localhost:54321/storage/v1/object/public/avatar/" ++ path) profile.avatarPath
+                                , status = Just (Success "Profile loaded")
+                              }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            ( { model | status = Just (Error "Profile not found") }, Cmd.none )
+
+                Err error ->
+                    GraphQL.handleFailure "GraphQL profile load failed" error model
 
 
 view : Model -> List (Html Msg)
