@@ -52,11 +52,7 @@ type alias Model =
     , searchNotesPage : SearchNotes.Model
     , trashPage : Trash.Model
     , profilePage : Profile.Model
-    , status : Maybe Status
     , state : State
-    , currentNote : Maybe Supabase.Note
-    , notes : List Supabase.Note
-    , trashedNotes : List Supabase.Note
     , nextId : Int
     }
 
@@ -93,11 +89,7 @@ init flags =
       , searchNotesPage = SearchNotes.init config Nothing Nothing
       , trashPage = Trash.init config Nothing Nothing
       , profilePage = Profile.init
-      , status = Just (Info "Checking session...")
       , state = Start
-      , currentNote = Nothing
-      , notes = []
-      , trashedNotes = []
       , nextId = 1
       }
     , Supabase.sendCommand (Supabase.InitializeSession { requestId = "init-0" })
@@ -514,30 +506,8 @@ applyEvent event model =
                 | accessToken = Nothing
                 , userId = Nothing
                 , state = Start
-                , notes = []
                 , status = Just (Success "You are signed out")
               }
-            , Cmd.none
-            )
-
-        Supabase.NotesLoaded payload ->
-            ( { model
-                | notes = payload.notes
-                , status = Just (Success "Notes loaded")
-              }
-            , Cmd.none
-            )
-
-        Supabase.NoteCreated payload ->
-            ( { model
-                | notes = payload.note :: model.notes
-                , status = Just (Success "Note saved")
-              }
-            , Cmd.none
-            )
-
-        Supabase.NotesFound _ ->
-            ( { model | status = Just (Success "Notes found") }
             , Cmd.none
             )
 

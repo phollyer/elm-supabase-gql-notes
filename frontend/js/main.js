@@ -9,7 +9,7 @@ import {
     signInWithMagicLink,
     signOut
 } from './supabase/auth.js'
-import { createNote, fetchNotes, searchNotes, uploadAvatar } from './supabase/data.js'
+import { uploadAvatar } from './supabase/data.js'
 
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY
 const graphqlUrl = `${import.meta.env.VITE_SUPABASE_URL}/graphql/v1`
@@ -52,18 +52,6 @@ const run = async (message) => {
 
         case 'sign-out':
             emit(await signOut(requestId))
-            return
-
-        case 'fetch-notes':
-            emit(await fetchNotes(requestId))
-            return
-
-        case 'create-note':
-            emit(await createNote(requestId, message.title, message.body))
-            return
-
-        case 'search-notes':
-            emit(await searchNotes(requestId, message.query))
             return
 
         case 'upload-avatar':

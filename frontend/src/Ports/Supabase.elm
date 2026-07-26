@@ -19,18 +19,12 @@ type Command
     | SignInWithMagicLink { requestId : String, email : String }
     | SignUpWithPassword { requestId : String, email : String, password : String }
     | SignOut { requestId : String }
-    | FetchNotes { requestId : String }
-    | CreateNote { requestId : String, title : String, body : String }
-    | SearchNotes { requestId : String, query : String }
     | UploadAvatar { requestId : String }
 
 
 type Event
     = SessionReady { requestId : String, accessToken : String, userId : String, email : String }
     | SessionMissing { requestId : String }
-    | NotesLoaded { requestId : String, notes : List Note }
-    | NotesFound { requestId : String, notes : List Note }
-    | NoteCreated { requestId : String, note : Note }
     | AvatarUploaded { requestId : String, avatarUrl : String, avatarPath : String }
     | ErrorRaised { requestId : String, message : String }
 
@@ -43,17 +37,6 @@ type alias Note =
     , updatedAt : String
     , deletedAt : Maybe String
     }
-
-
-noteDecoder : Decoder Note
-noteDecoder =
-    Decode.map6 Note
-        (Decode.field "id" Decode.string)
-        (Decode.field "title" Decode.string)
-        (Decode.field "body" Decode.string)
-        (Decode.field "created_at" Decode.string)
-        (Decode.field "updated_at" Decode.string)
-        (Decode.field "deleted_at" (Decode.nullable Decode.string))
 
 
 port supabaseOut : Encode.Value -> Cmd msg
@@ -111,27 +94,6 @@ encodeCommand command =
                 , ( "requestId", Encode.string payload.requestId )
                 ]
 
-        FetchNotes payload ->
-            Encode.object
-                [ ( "type", Encode.string "fetch-notes" )
-                , ( "requestId", Encode.string payload.requestId )
-                ]
-
-        CreateNote payload ->
-            Encode.object
-                [ ( "type", Encode.string "create-note" )
-                , ( "requestId", Encode.string payload.requestId )
-                , ( "title", Encode.string payload.title )
-                , ( "body", Encode.string payload.body )
-                ]
-
-        SearchNotes payload ->
-            Encode.object
-                [ ( "type", Encode.string "search-notes" )
-                , ( "requestId", Encode.string payload.requestId )
-                , ( "query", Encode.string payload.query )
-                ]
-
         UploadAvatar payload ->
             Encode.object
                 [ ( "type", Encode.string "upload-avatar" )
@@ -167,24 +129,6 @@ decodeByType eventType =
             Decode.map
                 (\requestId -> SessionMissing { requestId = requestId })
                 (Decode.field "requestId" Decode.string)
-
-        "notes-loaded" ->
-            Decode.map2
-                (\requestId notes -> NotesLoaded { requestId = requestId, notes = notes })
-                (Decode.field "requestId" Decode.string)
-                (Decode.field "notes" (Decode.list noteDecoder))
-
-        "notes-found" ->
-            Decode.map2
-                (\requestId notes -> NotesFound { requestId = requestId, notes = notes })
-                (Decode.field "requestId" Decode.string)
-                (Decode.field "notes" (Decode.list noteDecoder))
-
-        "note-created" ->
-            Decode.map2
-                (\requestId note -> NoteCreated { requestId = requestId, note = note })
-                (Decode.field "requestId" Decode.string)
-                (Decode.field "note" noteDecoder)
 
         "avatar-uploaded" ->
             Decode.map3
